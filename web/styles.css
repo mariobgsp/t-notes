@@ -17,7 +17,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc);flex:none}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);max-width:520px;width:calc(100vw - 40px);padding:0}dialog::backdrop{background:rgba(0,0,0,.45);animation:fade .2s ease-out}dialog[open]{animation:modalIn .22s cubic-bezier(.2,.9,.3,1.1)}
 @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-#modal-body,#guide-body{padding:18px;display:flex;flex-direction:column;gap:10px}#guide-body h2{margin:0;font-size:18px}#guide-body h3{margin:6px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}#guide-body p{margin:0;font-size:14px}
+#modal-body,#guide-body,#settings-body{padding:18px;display:flex;flex-direction:column;gap:10px}#settings-body h2{margin:0;font-size:18px}#settings-body .mut,#set-msg{color:var(--mut);font-size:13px}#settings-body input[type=text],#settings-body input[type=password],#settings-body select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%;font:inherit}#guide-body h2{margin:0;font-size:18px}#guide-body h3{margin:6px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}#guide-body p{margin:0;font-size:14px}
 #modal-body input[type=text],#modal-body textarea,#modal-body select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%;font:inherit}
 .mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mgrow{flex:1;min-width:0}
 .badges{display:flex;gap:4px;flex-wrap:wrap;font-size:11px;color:var(--mut)}

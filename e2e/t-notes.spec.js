@@ -77,9 +77,7 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await m.locator('input[type="date"]').fill("2030-01-15");
   await m.locator('[data-act="label"]').click();
   await m.locator('.pal [data-c="green"]').click();
-  await expect(
-    page.locator("#c-doing .card .strip").first(),
-  ).toBeVisible();
+  await expect(page.locator("#c-doing .card .strip").first()).toBeVisible();
   await m.getByPlaceholder(/Write a comment/).fill("Looks good");
   await m.getByPlaceholder(/Write a comment/).press("Enter");
   await m.locator("text=close").click();
@@ -134,10 +132,78 @@ test("search, lists, theme", async ({ page }) => {
   await expect(page.locator("#c-todo .card")).toHaveCount(0);
   await page.locator("#theme").click();
   await expect
-    .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
+    .poll(async () =>
+      page.evaluate(() => document.documentElement.dataset.theme),
+    )
     .toBe("dark");
   await page.reload();
   await expect
-    .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
+    .poll(async () =>
+      page.evaluate(() => document.documentElement.dataset.theme),
+    )
     .toBe("dark");
+});
+
+async function seedAi(page, reply) {
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "t-notes-v1",
+      JSON.stringify({
+        notes: [],
+        lists: [
+          { id: "todo", name: "To Do" },
+          { id: "doing", name: "Doing" },
+          { id: "done", name: "Done" },
+        ],
+        cards: [],
+        activity: [],
+        settings: {
+          provider: "zen",
+          baseUrl: "https://opencode.ai/zen/v1",
+          model: "big-pickle",
+          key: "test-key",
+        },
+      }),
+    ),
+  );
+  await page.route("**/chat/completions", (r) =>
+    r.fulfill({ json: { choices: [{ message: { content: reply } }] } }),
+  );
+  await page.reload();
+}
+
+test("ai: summarize replaces compose body", async ({ page }) => {
+  await seedAi(page, "Short summary.");
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill("Long note");
+  await page.locator("#compose-text").fill("A very long rambling note body.");
+  await page.locator('#compose-ai button:has-text("Summarize")').click();
+  await expect(
+    page.locator("#toasts .toast", { hasText: "Summarized" }),
+  ).toBeVisible();
+  await page.locator("#compose-save").click();
+  await expect(page.locator("#notes .note .nbody").first()).toContainText(
+    "Short summary.",
+  );
+});
+
+test("ai: checklist adds card items", async ({ page }) => {
+  await seedAi(page, "Buy milk\nCall mom");
+  await page.locator("#tab-board").click();
+  await addCard(page, "Errands");
+  await page
+    .locator("#c-todo .card")
+    .first()
+    .locator('[data-act="open"]')
+    .click();
+  const m = page.locator("#modal-body");
+  await m.locator('.mrow button:has-text("Checklist")').click();
+  await expect(m.locator(".clist .mrow")).toHaveCount(2);
+});
+
+test("ai: missing key opens settings", async ({ page }) => {
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill("No key note");
+  await page.locator('#compose-ai button:has-text("Summarize")').click();
+  await expect(page.locator("#settings")).toContainText("AI settings");
 });

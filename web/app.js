@@ -26,6 +26,10 @@ function normalize(d) {
         ];
   d.cards = d.cards || [];
   d.activity = [];
+  d.settings = Object.assign(
+    { provider: "zen", baseUrl: "https://opencode.ai/zen/v1", model: "big-pickle", key: "" },
+    d.settings || {},
+  );
   for (const n of d.notes) {
     n.id = n.id || uid();
     n.title = n.title || n.text || "Untitled";
@@ -59,6 +63,49 @@ const COLORS = [
   ["purple", "#c377e0"],
   ["blue", "#0079bf"],
 ];
+// ponytail: three presets, anything else is a custom URL — new providers are config, not code
+const AI_PRESETS = {
+  zen: { label: "OpenCode Zen (free)", baseUrl: "https://opencode.ai/zen/v1", model: "big-pickle" },
+  openrouter: { label: "OpenRouter (free)", baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/free" },
+  custom: { label: "Custom", baseUrl: "", model: "" },
+};
+const escHtml = (x) =>
+  String(x ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+async function aiChat(prompt, maxTokens = 500, st = s.settings) {
+  if (!st.key) return null;
+  const url = `${st.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 60000);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      signal: ctl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${st.key}`,
+      },
+      body: JSON.stringify({
+        model: st.model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        stream: false,
+      }),
+    });
+    if (!r.ok) throw new Error(`AI error ${r.status}`);
+    const j = await r.json();
+    const text = j.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error("empty AI reply");
+    return text;
+  } catch (e) {
+    toast(e.name === "AbortError" ? "AI timed out" : `AI failed: ${e.message}`);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 const filter = { label: null, tag: null };
 let openPal = null,
   showArch = false,
@@ -89,7 +136,23 @@ function toast(msg) {
   }, 2200);
 }
 // rich text: allowlist filter (contenteditable output), no innerHTML anywhere
-const RICH_TAGS = ["B", "STRONG", "I", "EM", "U", "S", "STRIKE", "P", "DIV", "BR", "UL", "OL", "LI", "SPAN", "FONT"];
+const RICH_TAGS = [
+  "B",
+  "STRONG",
+  "I",
+  "EM",
+  "U",
+  "S",
+  "STRIKE",
+  "P",
+  "DIV",
+  "BR",
+  "UL",
+  "OL",
+  "LI",
+  "SPAN",
+  "FONT",
+];
 function cleanStyle(s) {
   const out = [];
   for (const d of String(s).split(";")) {
@@ -97,9 +160,18 @@ function cleanStyle(s) {
     const k = kv[0] && kv[0].trim().toLowerCase(),
       v = kv[1] && kv[1].trim();
     if (!k || !v) continue;
-    if (!["color", "font-size", "font-weight", "font-style", "text-decoration"].includes(k)) continue;
+    if (
+      ![
+        "color",
+        "font-size",
+        "font-weight",
+        "font-style",
+        "text-decoration",
+      ].includes(k)
+    )
+      continue;
     if (/url\(|expression|</i.test(v)) continue;
-    if (!/^[a-zA-Z0-9#(),.% \-]+$/.test(v)) continue;
+    if (!/^[a-zA-Z0-9#(),.% -]+$/.test(v)) continue;
     out.push(`${k}:${v}`);
   }
   return out.join(";");
@@ -686,16 +758,34 @@ function openCompose(mode) {
 }
 document.getElementById("compose-save").onclick = () => {
   const html = editableHtml(cText);
-  const t = cTitle.value.trim() || plain(html).trim().slice(0, 40) || "Untitled";
+  const t =
+    cTitle.value.trim() || plain(html).trim().slice(0, 40) || "Untitled";
   if (composeMode === "note") {
-    s.notes.unshift({ id: uid(), title: t, body: html, labels: [], archived: false });
+    s.notes.unshift({
+      id: uid(),
+      title: t,
+      body: html,
+      labels: [],
+      archived: false,
+    });
     toast("Note saved");
   } else {
     if (!s.lists.length) {
       toast("Add a list first");
       return;
     }
-    s.cards.push({ id: uid(), title: t, desc: html, done: false, list: cList.value || s.lists[0].id, labels: [], checklist: [], comments: [], due: null, archived: false });
+    s.cards.push({
+      id: uid(),
+      title: t,
+      desc: html,
+      done: false,
+      list: cList.value || s.lists[0].id,
+      labels: [],
+      checklist: [],
+      comments: [],
+      due: null,
+      archived: false,
+    });
     log(`added “${t}”`);
     toast("Card added");
   }
@@ -704,6 +794,135 @@ document.getElementById("compose-save").onclick = () => {
   renderAll();
 };
 document.getElementById("compose-cancel").onclick = () => composeDlg.close();
+// AI settings dialog
+const setDlg = document.getElementById("settings"),
+  setProv = document.getElementById("set-provider"),
+  setUrl = document.getElementById("set-url"),
+  setModel = document.getElementById("set-model"),
+  setKey = document.getElementById("set-key"),
+  setMsg = document.getElementById("set-msg");
+function openSettings() {
+  setProv.replaceChildren();
+  for (const [id, p] of Object.entries(AI_PRESETS)) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = p.label;
+    if (id === s.settings.provider) o.selected = true;
+    setProv.append(o);
+  }
+  setUrl.value = s.settings.baseUrl;
+  setModel.value = s.settings.model;
+  setKey.value = s.settings.key;
+  setMsg.textContent = "";
+  setDlg.showModal();
+}
+document.getElementById("ai-open").onclick = openSettings;
+setProv.onchange = () => {
+  const p = AI_PRESETS[setProv.value];
+  if (setProv.value !== "custom" && p) {
+    setUrl.value = p.baseUrl;
+    setModel.value = p.model;
+  }
+};
+document.getElementById("set-test").onclick = async () => {
+  setMsg.textContent = "Testing…";
+  const out = await aiChat("Reply with exactly: OK", 5, {
+    provider: "custom",
+    baseUrl: setUrl.value,
+    model: setModel.value,
+    key: setKey.value,
+  });
+  setMsg.textContent =
+    out && out.includes("OK")
+      ? "Connected"
+      : "Failed — check URL, model, key";
+};
+document.getElementById("set-save").onclick = () => {
+  s.settings = {
+    provider: setProv.value,
+    baseUrl: setUrl.value.trim().replace(/\/$/, ""),
+    model: setModel.value.trim(),
+    key: setKey.value,
+  };
+  save();
+  setDlg.close();
+  toast("AI settings saved");
+};
+document.getElementById("set-close").onclick = () => setDlg.close();
+// AI actions: summarize, checklist, improve, ideas
+const AI_PROMPTS = {
+  summarize: (t) =>
+    `Summarize this note in 2-3 short sentences. Plain text only, no headers:\n\n${t}`,
+  checklist: (t) =>
+    `Turn this note into a short checklist. Reply with one item per line, no bullets or numbers:\n\n${t}`,
+  improve: (t) =>
+    `Rewrite this note clearly with proper grammar. Keep the same meaning and language. Reply with the rewritten note only:\n\n${t}`,
+  ideas: (t) =>
+    `Suggest 3 short, practical next steps for this note. One per line, no numbering:\n\n${t}`,
+};
+const AI_DONE = {
+  summarize: "Summarized",
+  checklist: "Checklist added",
+  improve: "Text improved",
+  ideas: "Ideas added",
+};
+function linesOf(out) {
+  return out
+    .split("\n")
+    .map((l) => l.trim().replace(/^manent[-*\d.)\s]+/, ""))
+    .filter(Boolean);
+}
+function aiRow(getText, apply) {
+  const row = el("div", null, "mrow");
+  for (const [label, kind] of [
+    ["Summarize", "summarize"],
+    ["Checklist", "checklist"],
+    ["Improve", "improve"],
+    ["Ideas", "ideas"],
+  ]) {
+    const b = el("button", label, "fbtn");
+    b.onclick = () => runAi(kind, getText, apply, b);
+    row.append(b);
+  }
+  return row;
+}
+async function runAi(kind, getText, apply, btn) {
+  if (!s.settings.key) {
+    toast("Set your AI key in Settings first");
+    openSettings();
+    return;
+  }
+  const { title, text } = getText();
+  const body = `${title}\n${text}`.trim();
+  if (!plain(body).trim()) {
+    toast("Nothing to send yet");
+    return;
+  }
+  btn.disabled = true;
+  const out = await aiChat(AI_PROMPTS[kind](body.slice(0, 6000)));
+  btn.disabled = false;
+  if (out == null) return;
+  apply(kind, out);
+  save();
+  renderAll();
+  toast(AI_DONE[kind]);
+}
+document.getElementById("compose-ai").append(
+  aiRow(
+    () => ({ title: cTitle.value, text: plain(editableHtml(cText)) }),
+    (kind, out) => {
+      if (kind === "checklist" || kind === "ideas") {
+        const cur = editableHtml(cText);
+        const add = linesOf(out)
+          .map((l) => `- ${escHtml(l)}`)
+          .join("<br>");
+        cText.replaceChildren(htmlNodes(cur + (cur ? "<br>" : "") + add));
+      } else {
+        cText.replaceChildren(htmlNodes(escHtml(out).replace(/\n/g, "<br>")));
+      }
+    },
+  ),
+);
 // native HTML5 drag & drop, zero deps
 let dragId = null;
 board.addEventListener("dragstart", (e) => {
@@ -806,6 +1025,28 @@ function renderModal() {
   desc.append(htmlNodes(c.desc));
   mb.append(toolsEl(desc));
   mb.append(desc);
+  mb.append(
+    aiRow(
+      () => ({ title: c.title, text: plain(c.desc) }),
+      (kind, out) => {
+        if (kind === "checklist") {
+          for (const t of linesOf(out))
+            c.checklist.push({ id: uid(), text: t, done: false });
+        } else if (kind === "ideas") {
+          c.desc =
+            c.desc +
+            (c.desc ? "<br>" : "") +
+            linesOf(out)
+              .map((l) => `- ${escHtml(l)}`)
+              .join("<br>");
+        } else {
+          c.desc = escHtml(out).replace(/\n/g, "<br>");
+        }
+        save();
+        renderModal();
+      },
+    ),
+  );
   desc.oninput = () => {
     c.desc = editableHtml(desc);
     save();
@@ -991,8 +1232,11 @@ startupBackend()
   .catch(() => {});
 document.getElementById("export").onclick = () => {
   try {
-    const raw = localStorage.getItem(K) || "{}";
-    JSON.parse(raw);
+    const raw = JSON.stringify({
+      ...s,
+      activity: [],
+      settings: { ...s.settings, key: "" },
+    });
     const b = new Blob([raw], { type: "application/json" }),
       a = document.createElement("a");
     a.href = URL.createObjectURL(b);

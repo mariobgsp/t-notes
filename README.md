@@ -13,6 +13,9 @@ Local-first, single-user notes + kanban board. Trello's core, none of its cloud 
 - **Search + filter** — text search, label and `#tag` filters
 - **Archive + activity log**, checklist-item → card conversion
 - **Light/dark mode** (follows system, toggle persisted)
+- **AI assistant** (BYOK) — OpenCode Zen free default (`big-pickle`), OpenRouter,
+  or any OpenAI-compatible URL. Summarize, Checklist, Improve, Ideas in notes
+  and cards. Key stays local, never exported
 - All data stays in your browser (`localStorage t-notes-v1`)
 
 ## Run it (any OS with a browser)
