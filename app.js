@@ -760,24 +760,42 @@ mb.onclick = (e) => {
     return;
   }
 };
-// auto-startup (Windows host only) + local JSON backup
+// auto-startup (Tauri desktop or Go host) + local JSON backup
+// ponytail: Tauri invoke called directly, no npm plugin wrapper until it earns it
 const stBtn = document.getElementById("startup");
-fetch("api/startup")
-  .then((r) => (r.ok ? r.json() : null))
-  .then((j) => {
-    if (!j) return;
-    stBtn.hidden = false;
-    stBtn.dataset.on = j.enabled ? "1" : "";
-    stBtn.onclick = () =>
+async function startupBackend() {
+  const core = window.__TAURI__?.core;
+  if (core?.invoke) {
+    return {
+      get: () => core.invoke("plugin:autostart|is_enabled"),
+      set: async (on) => {
+        await core.invoke(on ? "plugin:autostart|enable" : "plugin:autostart|disable");
+        return on;
+      },
+    };
+  }
+  const r = await fetch("api/startup");
+  if (!r.ok) return null;
+  return {
+    get: () => r.json().then((j) => j.enabled),
+    set: (on) =>
       fetch("api/startup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: stBtn.dataset.on !== "1" }),
+        body: JSON.stringify({ enabled: on }),
       })
-        .then((r) => r.json())
-        .then((k) => {
-          stBtn.dataset.on = k.enabled ? "1" : "";
-        });
+        .then((x) => x.json())
+        .then((k) => k.enabled),
+  };
+}
+startupBackend()
+  .then(async (b) => {
+    if (!b) return;
+    stBtn.hidden = false;
+    stBtn.dataset.on = (await b.get()) ? "1" : "";
+    stBtn.onclick = async () => {
+      stBtn.dataset.on = (await b.set(stBtn.dataset.on !== "1")) ? "1" : "";
+    };
   })
   .catch(() => {});
 document.getElementById("export").onclick = () => {

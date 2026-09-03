@@ -49,6 +49,19 @@ sh build-windows.sh   # needs only Go → dist/t-notes.exe + dist/t-notes-setup.
 | `main.go` | Windows host: local server + self-installer with shortcuts |
 | `build-windows.sh` | `GOOS=windows go build` cross-compile from Linux |
 
+## Real desktop app (Tauri)
+
+The Go exe above is a browser launcher. For a usual Windows program — own
+window, `t-notes-setup.exe` installer with Start Menu + Desktop shortcuts,
+proper uninstall entry — Tauri builds it on GitHub Actions:
+
+- Push a tag: `git tag v0.1.0 && git push origin v0.1.0`, or run the
+  `windows build` workflow manually. A draft release with the installer
+  appears under GitHub Releases.
+- Local dev (Linux): `npm install` then `npx tauri dev` (needs Rust).
+- The ⏻ startup toggle works in both builds (Tauri autostart plugin
+  vs Go `/api/startup` fallback).
+
 ## Tests
 
 ```sh
