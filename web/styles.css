@@ -14,7 +14,7 @@ form{display:flex;gap:8px;margin:8px 0 14px}input{flex:1;padding:9px 12px;border
 .col{background:color-mix(in srgb,var(--card) 70%,transparent);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:200px}.col h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:2px 4px 10px}
 .cards{display:grid;gap:8px}.mv{background:var(--card);border:1.5px solid color-mix(in srgb,var(--fg) 30%,var(--line));color:var(--fg);border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:600}.mv:hover{background:color-mix(in srgb,var(--fg) 10%,var(--card))}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc);flex:none}
-dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);max-width:520px;width:calc(100vw - 40px);padding:0}dialog::backdrop{background:rgba(0,0,0,.45);animation:fade .2s ease-out}dialog[open]{animation:modalIn .22s cubic-bezier(.2,.9,.3,1.1)}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);max-width:560px;width:calc(100vw - 40px);max-height:calc(100dvh - 32px);overflow:auto;padding:0}dialog::backdrop{background:rgba(0,0,0,.45);animation:fade .2s ease-out}dialog[open]{animation:modalIn .22s cubic-bezier(.2,.9,.3,1.1)}
 @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 #modal-body,#guide-body,#settings-body{padding:18px;display:flex;flex-direction:column;gap:10px}#settings-body h2{margin:0;font-size:18px}#settings-body .mut,#set-msg{color:var(--mut);font-size:13px}#settings-body input[type=text],#settings-body input[type=password],#settings-body select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%;font:inherit}#guide-body h2{margin:0;font-size:18px}#guide-body h3{margin:6px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}#guide-body p{margin:0;font-size:14px}
@@ -37,7 +37,7 @@ dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);co
 .pal{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .itemcol{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .trow{display:flex;gap:8px;align-items:center}
-#compose-body{width:min(560px,92vw);padding:18px;display:flex;flex-direction:column;gap:10px}#compose-body h2{margin:0;font-size:18px}
+#compose-body{width:min(560px,92vw);height:min(72dvh,640px);padding:18px;display:flex;flex-direction:column;gap:10px}#compose-body h2{margin:0;font-size:18px}
 #compose-body .btnrow{margin-top:4px}
 #compose-body .mrow:last-child{justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px}
 #compose-body #compose-save{min-width:96px;font-weight:700;padding:10px 20px;font-size:14px}
@@ -46,6 +46,7 @@ dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);co
 #compose-body input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;font:inherit;font-weight:700}
 .tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.tools button{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:13px;min-width:32px}.tools input[type=color]{width:34px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:2px;cursor:pointer}
 #compose-text,.rich{min-height:110px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg);overflow-wrap:anywhere;font-size:14px}#compose-text:empty:before,.rich:empty:before{content:attr(data-ph);color:var(--mut)}#compose-text:focus,.rich:focus{outline:2px solid var(--acc);outline-offset:1px}
+#compose-body #compose-text{flex:1;min-height:140px;overflow-y:auto;resize:vertical}
 #toasts{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;align-items:center;pointer-events:none}.toast{background:var(--fg);color:var(--bg);border-radius:99px;padding:8px 18px;font-size:13px;white-space:nowrap;animation:toastIn .2s ease-out;box-shadow:0 4px 16px rgba(0,0,0,.25)}.toast.out{opacity:0;transform:translateY(4px);transition:opacity .25s,transform .25s}
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .strip{width:36px;height:9px;border-radius:4px;border:none;cursor:pointer;padding:0;flex:none}
