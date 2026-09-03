@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>t-notes</title>
+<script>try{const t=localStorage.getItem('tn-theme')||localStorage.getItem('nk-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t}catch{}</script>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+<img src="logo.svg" alt="t-notes logo" width="24" height="24"><strong>t-notes</strong>
+<nav><button id="tab-notes" class="tab on">Notes</button><button id="tab-board" class="tab">Board</button></nav>
+<button id="theme" title="toggle theme">◐</button>
+</header>
+<div id="filters"></div>
+<main>
+<section id="view-notes">
+<form id="note-form"><input id="note-input" placeholder="Write a note… (#tag works)" autocomplete="off"><button>Add</button></form>
+<div id="notes"></div>
+<p><button id="show-arch" class="fbtn">show archived</button></p>
+<div id="arch-notes" hidden></div>
+</section>
+<section id="view-board" hidden>
+<form id="search-form"><input id="search-input" placeholder="Search cards…" autocomplete="off"></form>
+<form id="card-form"><input id="card-input" placeholder="New card… (#tag works)" autocomplete="off"><select id="card-list"></select><button>Add card</button></form>
+<div id="board"></div>
+<form id="list-form"><input id="list-input" placeholder="New list…" autocomplete="off"><button>Add list</button></form>
+<p><button id="show-act" class="fbtn">activity</button></p>
+<div id="activity" hidden></div>
+</section>
+</main>
+<dialog id="modal"><div id="modal-body"></div></dialog>
+<script src="app.js"></script>
+</body>
+</html>
