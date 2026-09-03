@@ -30,7 +30,7 @@ function normalize(d) {
     {
       provider: "command",
       baseUrl: "https://api.commandcode.ai/provider/v1",
-      model: "muse-spark-1.3-contributor",
+      model: "meta/muse-spark-1.3-contributor",
       key: "",
     },
     d.settings || {},
@@ -84,7 +84,7 @@ const AI_PRESETS = {
   command: {
     label: "Command Code",
     baseUrl: "https://api.commandcode.ai/provider/v1",
-    model: "muse-spark-1.3-contributor",
+    model: "meta/muse-spark-1.3-contributor",
   },
   custom: { label: "Custom", baseUrl: "", model: "" },
 };
@@ -109,6 +109,7 @@ async function aiChat(prompt, maxTokens = 500, st = s.settings) {
       body: JSON.stringify({
         model: st.model,
         messages: [{ role: "user", content: prompt }],
+        reasoning_effort: "medium",
         max_tokens: maxTokens,
         stream: false,
       }),
@@ -894,7 +895,7 @@ setProv.onchange = () => {
 };
 document.getElementById("set-test").onclick = async () => {
   setMsg.textContent = "Testing…";
-  const out = await aiChat("Reply with exactly: OK", 5, {
+  const out = await aiChat("Reply with exactly: OK", 300, {
     provider: "custom",
     baseUrl: setUrl.value,
     model: setModel.value,

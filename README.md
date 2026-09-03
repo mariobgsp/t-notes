@@ -19,7 +19,7 @@ Local-first, single-user notes + kanban board. Trello's core, none of its cloud 
 - **Archive + activity log**, checklist-item → card conversion
 - **Toasts** confirm every action; **?** button opens the in-app guide
 - **Light/dark mode** (follows system, toggle persisted)
-- **AI assistant** (BYOK) — Command Code default (`muse-spark-1.3-contributor`),
+- **AI assistant** (BYOK) — Command Code default (`meta/muse-spark-1.3-contributor`),
   plus OpenCode Zen free, OpenRouter, or any OpenAI-compatible URL.
   Summarize, Checklist, Improve, Ideas in notes and cards.
   Key stays local, never exported
