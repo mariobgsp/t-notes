@@ -12,7 +12,7 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: "python3 -m http.server 8901 --directory ..",
+    command: "python3 -m http.server 8901 --directory ../web",
     port: 8901,
     reuseExistingServer: true,
   },

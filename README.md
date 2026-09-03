@@ -18,7 +18,7 @@ Local-first, single-user notes + kanban board. Trello's core, none of its cloud 
 ## Run it (any OS with a browser)
 
 ```sh
-cd t-notes
+cd t-notes/web
 python3 -m http.server 8000
 # open http://localhost:8000
 ```
@@ -43,9 +43,7 @@ sh build-windows.sh   # needs only Go → dist/t-notes.exe + dist/t-notes-setup.
 
 | File | What |
 | --- | --- |
-| `index.html` | Shell: Notes \| Board tabs, filter bar, card modal |
-| `styles.css` | Theming (CSS vars), layout, GPU-only animations |
-| `app.js` | State, `localStorage` persistence, rendering (no framework) |
+| `web/` | Frontend: `index.html`, `styles.css`, `app.js`, `logo.svg` (no framework) |
 | `main.go` | Windows host: local server + self-installer with shortcuts |
 | `build-windows.sh` | `GOOS=windows go build` cross-compile from Linux |
 

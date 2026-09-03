@@ -769,7 +769,9 @@ async function startupBackend() {
     return {
       get: () => core.invoke("plugin:autostart|is_enabled"),
       set: async (on) => {
-        await core.invoke(on ? "plugin:autostart|enable" : "plugin:autostart|disable");
+        await core.invoke(
+          on ? "plugin:autostart|enable" : "plugin:autostart|disable",
+        );
         return on;
       },
     };

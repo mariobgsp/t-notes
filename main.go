@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-//go:embed index.html styles.css app.js logo.svg
+//go:embed web
 var assets embed.FS
 
 func main() {
@@ -52,7 +52,7 @@ func serve(quiet bool) {
 		if p == "" {
 			p = "index.html"
 		}
-		b, err := assets.ReadFile(p)
+		b, err := assets.ReadFile("web/" + p)
 		if err != nil {
 			http.NotFound(w, r)
 			return

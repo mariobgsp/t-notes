@@ -3,7 +3,7 @@ name: windows build
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
 jobs:
   build:
@@ -29,6 +29,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: t-notes-v__VERSION__
-          releaseName: 't-notes v__VERSION__'
-          releaseBody: 'Windows installer (NSIS) with Start Menu + Desktop shortcuts.'
+          releaseName: "t-notes v__VERSION__"
+          releaseBody: "Windows installer (NSIS) with Start Menu + Desktop shortcuts."
           releaseDraft: true
