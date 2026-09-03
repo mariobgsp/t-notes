@@ -6,35 +6,68 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test("notes: add, tag filter, persist", async ({ page }) => {
-  await page.locator("#note-input").fill("Buy milk #home");
-  await page.locator("#note-form button").click();
+async function addNote(page, title, body = "") {
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill(title);
+  if (body) await page.locator("#compose-text").fill(body);
+  await page.locator("#compose-save").click();
+}
+
+async function addCard(page, title, body = "") {
+  await page.locator("#tab-board").click();
+  await page.locator("#new-card").click();
+  await page.locator("#compose-title").fill(title);
+  if (body) await page.locator("#compose-text").fill(body);
+  await page.locator("#compose-save").click();
+}
+
+test("notes: popup, title-first, toast, persist", async ({ page }) => {
+  await addNote(page, "Shopping", "Buy milk #home");
   const note = page.locator("#notes .note").first();
-  await expect(note).toContainText("Buy milk");
-  await note.locator(".chip").click(); // filter by #home
-  await expect(page.locator("#notes .note")).toHaveCount(1);
-  await page.locator("#filters .fbtn").click(); // clear
+  await expect(note.locator(".ntitle")).toContainText("Shopping");
+  await expect(note.locator(".nbody")).toContainText("Buy milk");
+  await expect(page.locator("#toasts .toast").first()).toContainText(
+    "Note saved",
+  );
   await page.reload();
-  await expect(page.locator("#notes .note").first()).toContainText("Buy milk");
+  await expect(page.locator("#notes .note").first()).toContainText("Shopping");
+});
+
+test("rich text: bold survives save", async ({ page }) => {
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill("Styled");
+  await page.locator("#compose-text").fill("make this bold");
+  await page.locator("#compose-text").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.locator('#compose-tools [data-cmd="bold"]').click();
+  await page.locator("#compose-save").click();
+  const body = page.locator("#notes .note .nbody").first();
+  await expect(body.locator("b, strong").first()).toContainText(
+    "make this bold",
+  );
+});
+
+test("notes: label strips work", async ({ page }) => {
+  await addNote(page, "Colored");
+  const note = page.locator("#notes .note").first();
+  await note.locator('[data-act="label"]').click();
+  await note.locator('.pal [data-c="green"]').click();
+  await expect(note.locator(".strip").first()).toBeVisible();
 });
 
 test("board: card lifecycle with modal", async ({ page }) => {
-  await page.locator("#tab-board").click();
-  await page.locator("#card-input").fill("Ship v1 #work");
-  await page.locator("#card-form button").click();
+  await addCard(page, "Ship v1 #work");
   const card = page.locator("#c-todo .card").first();
   await expect(card).toContainText("Ship v1");
-  // move to Doing, check done
   await card.locator(".mv", { hasText: "→" }).click();
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");
-  // modal: desc + checklist + due + label + comment
   await page
     .locator("#c-doing .card")
     .first()
     .locator('[data-act="open"]')
     .click();
   const m = page.locator("#modal-body");
-  await m.locator("textarea").fill("Release notes here");
+  await m.locator(".rich").fill("Release notes here");
   await m.getByPlaceholder(/Add checklist item/).fill("Write changelog");
   await m.getByPlaceholder(/Add checklist item/).press("Enter");
   await m.getByPlaceholder(/Add checklist item/).fill("Tag release");
@@ -44,6 +77,9 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await m.locator('input[type="date"]').fill("2030-01-15");
   await m.locator('[data-act="label"]').click();
   await m.locator('.pal [data-c="green"]').click();
+  await expect(
+    page.locator("#c-doing .card .strip").first(),
+  ).toBeVisible();
   await m.getByPlaceholder(/Write a comment/).fill("Looks good");
   await m.getByPlaceholder(/Write a comment/).press("Enter");
   await m.locator("text=close").click();
@@ -51,10 +87,30 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await expect(done).toContainText("1/2");
   await expect(done).toContainText("2030-01-15");
   await expect(done).toContainText("💬1");
-  // persists
   await page.reload();
   await page.locator("#tab-board").click();
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");
+});
+
+test("import/export roundtrip", async ({ page }) => {
+  await addNote(page, "Keep me");
+  const [dl] = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator("#export").click(),
+  ]);
+  const fp = "/tmp/t-notes-backup-test.json";
+  await dl.saveAs(fp);
+  await expect(
+    page.locator("#toasts .toast", { hasText: "Backup exported" }),
+  ).toBeVisible();
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.locator("#notes .note")).toHaveCount(0);
+  await page.locator("#import-file").setInputFiles(fp);
+  await expect(page.locator("#notes .note").first()).toContainText("Keep me");
+  await expect(
+    page.locator("#toasts .toast", { hasText: "Imported" }),
+  ).toBeVisible();
 });
 
 test("guide dialog opens and closes", async ({ page }) => {
@@ -66,8 +122,7 @@ test("guide dialog opens and closes", async ({ page }) => {
 
 test("search, lists, theme", async ({ page }) => {
   await page.locator("#tab-board").click();
-  await page.locator("#card-input").fill("Alpha task");
-  await page.locator("#card-form button").click();
+  await addCard(page, "Alpha task");
   await page.locator("#list-input").fill("Review");
   await page.locator("#list-form button").click();
   await expect(
@@ -79,14 +134,10 @@ test("search, lists, theme", async ({ page }) => {
   await expect(page.locator("#c-todo .card")).toHaveCount(0);
   await page.locator("#theme").click();
   await expect
-    .poll(async () =>
-      page.evaluate(() => document.documentElement.dataset.theme),
-    )
+    .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
     .toBe("dark");
   await page.reload();
   await expect
-    .poll(async () =>
-      page.evaluate(() => document.documentElement.dataset.theme),
-    )
+    .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
     .toBe("dark");
 });

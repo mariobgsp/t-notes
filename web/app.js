@@ -13,23 +13,43 @@ if (!s.lists.length)
     { id: "doing", name: "Doing" },
     { id: "done", name: "Done" },
   ];
-for (const n of s.notes) {
-  n.labels = n.labels || [];
-  n.archived = !!n.archived;
+// ponytail: one normalize for load + import — old shapes migrate here, nowhere else
+function normalize(d) {
+  d.notes = d.notes || [];
+  d.lists =
+    d.lists && d.lists.length
+      ? d.lists
+      : [
+          { id: "todo", name: "To Do" },
+          { id: "doing", name: "Doing" },
+          { id: "done", name: "Done" },
+        ];
+  d.cards = d.cards || [];
+  d.activity = [];
+  for (const n of d.notes) {
+    n.id = n.id || uid();
+    n.title = n.title || n.text || "Untitled";
+    delete n.text;
+    n.body = n.body || "";
+    n.labels = n.labels || [];
+    n.archived = !!n.archived;
+  }
+  for (const c of d.cards) {
+    c.id = c.id || uid();
+    c.title = c.title || c.text || "Untitled";
+    delete c.text;
+    c.desc = c.desc || "";
+    c.list = c.list || c.col || d.lists[0].id;
+    delete c.col;
+    c.labels = c.labels || [];
+    c.checklist = c.checklist || [];
+    c.comments = c.comments || [];
+    c.due = c.due || null;
+    c.archived = !!c.archived;
+  }
+  return d;
 }
-for (const c of s.cards) {
-  c.title = c.title || c.text || "";
-  delete c.text;
-  c.desc = c.desc || "";
-  c.list = c.list || c.col || "todo";
-  delete c.col;
-  c.labels = c.labels || [];
-  c.checklist = c.checklist || [];
-  c.comments = c.comments || [];
-  c.due = c.due || null;
-  c.archived = !!c.archived;
-}
-s.activity = s.activity || [];
+normalize(s);
 // ponytail: Trello classic palette, 6 fixed colors — no custom-color picker until asked
 const COLORS = [
   ["green", "#61bd4f"],
@@ -57,6 +77,136 @@ function el(tag, text, cls) {
 function log(text) {
   s.activity.unshift({ ts: Date.now(), text });
   s.activity = s.activity.slice(0, 30);
+}
+// toasts: one line per action, auto-dismiss
+const toasts = document.getElementById("toasts");
+function toast(msg) {
+  const t = el("div", msg, "toast");
+  toasts.append(t);
+  setTimeout(() => {
+    t.classList.add("out");
+    setTimeout(() => t.remove(), 300);
+  }, 2200);
+}
+// rich text: allowlist filter (contenteditable output), no innerHTML anywhere
+const RICH_TAGS = ["B", "STRONG", "I", "EM", "U", "S", "STRIKE", "P", "DIV", "BR", "UL", "OL", "LI", "SPAN", "FONT"];
+function cleanStyle(s) {
+  const out = [];
+  for (const d of String(s).split(";")) {
+    const kv = d.split(":");
+    const k = kv[0] && kv[0].trim().toLowerCase(),
+      v = kv[1] && kv[1].trim();
+    if (!k || !v) continue;
+    if (!["color", "font-size", "font-weight", "font-style", "text-decoration"].includes(k)) continue;
+    if (/url\(|expression|</i.test(v)) continue;
+    if (!/^[a-zA-Z0-9#(),.% \-]+$/.test(v)) continue;
+    out.push(`${k}:${v}`);
+  }
+  return out.join(";");
+}
+function filterNode(n) {
+  if (n.nodeType === 3) return document.createTextNode(n.textContent);
+  if (n.nodeType !== 1) return document.createTextNode("");
+  if (n.tagName === "FONT") {
+    const sp = document.createElement("span"),
+      c = n.getAttribute("color");
+    if (c) sp.style.color = c;
+    for (const k of [...n.childNodes]) sp.append(filterNode(k));
+    return sp;
+  }
+  if (!RICH_TAGS.includes(n.tagName)) {
+    const f = document.createDocumentFragment();
+    for (const k of [...n.childNodes]) f.append(filterNode(k));
+    return f;
+  }
+  const e = document.createElement(n.tagName.toLowerCase());
+  if (n.tagName === "SPAN") {
+    const cs = cleanStyle(n.getAttribute("style") || "");
+    if (cs) e.setAttribute("style", cs);
+  }
+  for (const k of [...n.childNodes]) e.append(filterNode(k));
+  return e;
+}
+function htmlNodes(html) {
+  const f = document.createDocumentFragment();
+  if (!html) return f;
+  const body = new DOMParser().parseFromString(String(html), "text/html").body;
+  for (const n of [...body.childNodes]) f.append(filterNode(n));
+  return f;
+}
+function editableHtml(editable) {
+  const d = document.createElement("div");
+  for (const n of [...editable.childNodes]) d.append(filterNode(n));
+  return new XMLSerializer()
+    .serializeToString(d)
+    .replace(/ xmlns="[^"]*"/g, "")
+    .replace(/^<div>/, "")
+    .replace(/<\/div>$/, "");
+}
+const plain = (h) => String(h ?? "").replace(/<[^>]*>/g, " ");
+// shared B / I / color / size toolbar for any contenteditable
+function wireTools(tools, editable) {
+  let saved = null;
+  const stash = () => {
+    const sl = getSelection();
+    if (sl.rangeCount && editable.contains(sl.anchorNode))
+      saved = sl.getRangeAt(0).cloneRange();
+  };
+  editable.addEventListener("keyup", stash);
+  editable.addEventListener("mouseup", stash);
+  const restore = () => {
+    if (!saved) return;
+    const sl = getSelection();
+    sl.removeAllRanges();
+    try {
+      sl.addRange(saved);
+    } catch {}
+  };
+  tools.querySelectorAll("[data-cmd]").forEach((b) => {
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => {
+      editable.focus();
+      document.execCommand(b.dataset.cmd, false, null);
+    });
+  });
+  tools.querySelectorAll("[data-size]").forEach((b) => {
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => {
+      editable.focus();
+      document.execCommand("fontSize", false, b.dataset.size);
+    });
+  });
+  const col = tools.querySelector('input[type="color"]');
+  if (col)
+    col.addEventListener("change", () => {
+      editable.focus();
+      restore();
+      document.execCommand("foreColor", false, col.value);
+    });
+}
+function toolsEl(editable) {
+  const t = el("div", null, "tools");
+  const b = el("button", null, null);
+  b.dataset.cmd = "bold";
+  b.title = "bold";
+  b.append(el("b", "B"));
+  const i = el("button", null, null);
+  i.dataset.cmd = "italic";
+  i.title = "italic";
+  i.append(el("i", "I"));
+  const col = document.createElement("input");
+  col.type = "color";
+  col.title = "text color";
+  col.value = "#1c1c1e";
+  const sm = el("button", "S", null);
+  sm.title = "small text";
+  sm.dataset.size = "3";
+  const lg = el("button", "L", null);
+  lg.title = "large text";
+  lg.dataset.size = "5";
+  t.append(b, i, col, sm, lg);
+  wireTools(t, editable);
+  return t;
 }
 // tabs + theme
 const vn = document.getElementById("view-notes"),
@@ -105,20 +255,17 @@ function textWithTags(text) {
 }
 const hasTag = (text, t) => text.split(/\s+/).some((w) => w === `#${t}`);
 function matches(it) {
+  const text = `${it.title || it.text || ""} ${plain(it.body || it.desc || "")}`;
   if (filter.label && !it.labels.includes(filter.label)) return false;
-  if (filter.tag && !hasTag(it.title || it.text, filter.tag)) return false;
-  if (
-    query &&
-    !`${it.title || it.text} ${it.desc || ""}`.toLowerCase().includes(query)
-  )
-    return false;
+  if (filter.tag && !hasTag(text, filter.tag)) return false;
+  if (query && !text.toLowerCase().includes(query)) return false;
   return true;
 }
 function labelRow(it) {
   const row = el("div", null, "labels");
   for (const [name, hex] of COLORS) {
     if (!it.labels.includes(name)) continue;
-    const d = el("button", null, "dot");
+    const d = el("button", null, "strip");
     d.style.background = hex;
     d.title = name;
     d.dataset.act = "pick";
@@ -204,18 +351,10 @@ filters.onclick = (e) => {
   renderAll();
 };
 // ---- notes (Trello: simple cards, archivable) ----
-const ni = document.getElementById("note-input"),
-  nl = document.getElementById("notes"),
+const nl = document.getElementById("notes"),
   an = document.getElementById("arch-notes");
-document.getElementById("note-form").onsubmit = (e) => {
-  e.preventDefault();
-  const t = ni.value.trim();
-  if (!t) return;
-  s.notes.unshift({ id: uid(), text: t, labels: [], archived: false });
-  ni.value = "";
-  save();
-  renderAll();
-};
+document.getElementById("new-note").onclick = () => openCompose("note");
+document.getElementById("new-card").onclick = () => openCompose("card");
 document.getElementById("show-arch").onclick = (e) => {
   showArch = !showArch;
   an.hidden = !showArch;
@@ -226,10 +365,16 @@ function noteEl(n, arch) {
   const d = el("div", null, "note"),
     col = el("div", null, "itemcol"),
     top = el("div", null, "trow"),
-    sp = el("span", null, "t");
-  sp.append(textWithTags(n.text));
+    sp = el("span", null, "t ntitle");
+  sp.append(textWithTags(n.title || "Untitled"));
   top.append(sp);
-  col.append(top, labelRow(n));
+  col.append(top);
+  if (n.body) {
+    const b = el("div", null, "nbody");
+    b.append(htmlNodes(n.body));
+    col.append(b);
+  }
+  col.append(labelRow(n));
   if (openPal === n.id) col.append(palRow(n));
   d.append(col);
   const a = el("button", arch ? "↩" : "📦", "iconbtn");
@@ -280,6 +425,7 @@ function noteClick(e) {
     n.archived = !n.archived;
     save();
     renderAll();
+    toast(n.archived ? "Note archived" : "Note restored");
     return;
   }
   const b = e.target.closest(".del");
@@ -287,32 +433,10 @@ function noteClick(e) {
   s.notes = s.notes.filter((n) => n.id !== b.dataset.id);
   save();
   renderAll();
+  toast("Note deleted");
 }
 // ---- board: custom lists + cards ----
-const ci = document.getElementById("card-input"),
-  cs = document.getElementById("card-list"),
-  board = document.getElementById("board");
-document.getElementById("card-form").onsubmit = (e) => {
-  e.preventDefault();
-  const t = ci.value.trim();
-  if (!t || !s.lists.length) return;
-  s.cards.push({
-    id: uid(),
-    title: t,
-    desc: "",
-    done: false,
-    list: cs.value || s.lists[0].id,
-    labels: [],
-    checklist: [],
-    comments: [],
-    due: null,
-    archived: false,
-  });
-  log(`added “${t}”`);
-  ci.value = "";
-  save();
-  renderAll();
-};
+const board = document.getElementById("board");
 document.getElementById("list-form").onsubmit = (e) => {
   e.preventDefault();
   const inp = document.getElementById("list-input"),
@@ -323,6 +447,7 @@ document.getElementById("list-form").onsubmit = (e) => {
   inp.value = "";
   save();
   renderAll();
+  toast(`List “${t}” added`);
 };
 document.getElementById("search-input").oninput = (e) => {
   query = e.target.value.trim().toLowerCase();
@@ -410,20 +535,19 @@ function cardEl(c) {
   d.append(x);
   return d;
 }
+const LIST_ACCENTS = ["#0079bf", "#ff9f1a", "#61bd4f", "#c377e0", "#eb5a46"];
 function renderBoard() {
-  cs.replaceChildren();
-  for (const l of s.lists) {
-    const o = document.createElement("option");
-    o.value = l.id;
-    o.textContent = l.name;
-    cs.append(o);
-  }
   board.replaceChildren();
-  for (const l of s.lists) {
+  for (const [li, l] of s.lists.entries()) {
+    const acc = LIST_ACCENTS[li % LIST_ACCENTS.length];
     const col = el("div", null, "col"),
       head = el("div", null, "colhead"),
       h = el("h2", l.name);
-    head.append(h);
+    col.style.borderTop = `3px solid ${acc}`;
+    const dot = el("span", null, "dot");
+    dot.style.background = acc;
+    dot.style.cursor = "default";
+    head.append(dot, h);
     const n = s.cards.filter((c) => c.list === l.id && !c.archived).length;
     head.append(el("span", String(n), "badge"));
     const rn = el("button", "✎", "iconbtn");
@@ -485,6 +609,7 @@ board.onclick = (e) => {
       l.name = inp.value.trim() || l.name;
       save();
       renderAll();
+      toast(`List renamed to “${l.name}”`);
     };
     inp.onblur = () => renderAll();
     head.append(inp);
@@ -502,6 +627,7 @@ board.onclick = (e) => {
     log(`deleted list “${l.name}”`);
     save();
     renderAll();
+    toast(`List “${l.name}” deleted`);
     return;
   }
   const b = e.target.closest("[data-act]");
@@ -513,12 +639,14 @@ board.onclick = (e) => {
     c.done = !c.done;
     save();
     renderAll();
+    toast(c.done ? "Marked done" : "Reopened");
   } else if (a === "open") openModal(c.id);
   else if (a === "del") {
     c.archived = true;
     log(`archived “${c.title}”`);
     save();
     renderAll();
+    toast("Card archived");
   } else if (a === "mv") {
     const i = s.lists.findIndex((l) => l.id === c.list) + Number(b.dataset.dir);
     c.list = s.lists[i].id;
@@ -526,8 +654,56 @@ board.onclick = (e) => {
     log(`moved “${c.title}” → ${s.lists[i].name}`);
     save();
     renderAll();
+    toast(`Moved to ${s.lists[i].name}`);
   }
 };
+// compose popup: title first, rich body, save button
+let composeMode = "note";
+const composeDlg = document.getElementById("compose"),
+  cH = document.getElementById("compose-h"),
+  cTitle = document.getElementById("compose-title"),
+  cText = document.getElementById("compose-text"),
+  cListRow = document.getElementById("compose-listrow"),
+  cList = document.getElementById("compose-list");
+document.getElementById("compose-tools").append(toolsEl(cText));
+function openCompose(mode) {
+  composeMode = mode;
+  cH.textContent = mode === "note" ? "New note" : "New card";
+  cTitle.value = "";
+  cText.replaceChildren();
+  cListRow.hidden = mode !== "card";
+  if (mode === "card") {
+    cList.replaceChildren();
+    for (const l of s.lists) {
+      const o = document.createElement("option");
+      o.value = l.id;
+      o.textContent = l.name;
+      cList.append(o);
+    }
+  }
+  composeDlg.showModal();
+  setTimeout(() => cTitle.focus(), 50);
+}
+document.getElementById("compose-save").onclick = () => {
+  const html = editableHtml(cText);
+  const t = cTitle.value.trim() || plain(html).trim().slice(0, 40) || "Untitled";
+  if (composeMode === "note") {
+    s.notes.unshift({ id: uid(), title: t, body: html, labels: [], archived: false });
+    toast("Note saved");
+  } else {
+    if (!s.lists.length) {
+      toast("Add a list first");
+      return;
+    }
+    s.cards.push({ id: uid(), title: t, desc: html, done: false, list: cList.value || s.lists[0].id, labels: [], checklist: [], comments: [], due: null, archived: false });
+    log(`added “${t}”`);
+    toast("Card added");
+  }
+  save();
+  composeDlg.close();
+  renderAll();
+};
+document.getElementById("compose-cancel").onclick = () => composeDlg.close();
 // native HTML5 drag & drop, zero deps
 let dragId = null;
 board.addEventListener("dragstart", (e) => {
@@ -624,16 +800,21 @@ function renderModal() {
   mb.append(meta);
   mb.append(labelRow(c));
   if (openPal === c.id) mb.append(palRow(c));
-  const desc = document.createElement("textarea");
-  desc.rows = 3;
-  desc.placeholder = "Description…";
-  desc.value = c.desc;
-  desc.onchange = () => {
-    c.desc = desc.value;
+  const desc = el("div", null, "rich");
+  desc.contentEditable = "true";
+  desc.dataset.ph = "Description… (select text for bold, color, size)";
+  desc.append(htmlNodes(c.desc));
+  mb.append(toolsEl(desc));
+  mb.append(desc);
+  desc.oninput = () => {
+    c.desc = editableHtml(desc);
+    save();
+  };
+  desc.onblur = () => {
+    c.desc = editableHtml(desc);
     save();
     renderAll();
   };
-  mb.append(desc);
   // checklist with progress (Trello parity)
   mb.append(el("strong", `Checklist ${doneCount(c)}/${c.checklist.length}`));
   const bar = el("div", "bar"),
@@ -798,44 +979,54 @@ startupBackend()
   .then(async (b) => {
     if (!b) return;
     stBtn.hidden = false;
-    stBtn.dataset.on = (await b.get()) ? "1" : "";
+    const on = await b.get();
+    stBtn.dataset.on = on ? "1" : "";
+    if (on) toast("Launch on login is on");
     stBtn.onclick = async () => {
-      stBtn.dataset.on = (await b.set(stBtn.dataset.on !== "1")) ? "1" : "";
+      const now = await b.set(stBtn.dataset.on !== "1");
+      stBtn.dataset.on = now ? "1" : "";
+      toast(now ? "Launch on login: on" : "Launch on login: off");
     };
   })
   .catch(() => {});
 document.getElementById("export").onclick = () => {
-  const b = new Blob([localStorage.getItem(K)], { type: "application/json" }),
-    a = document.createElement("a");
-  a.href = URL.createObjectURL(b);
-  a.download = `t-notes-backup-${today()}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  try {
+    const raw = localStorage.getItem(K) || "{}";
+    JSON.parse(raw);
+    const b = new Blob([raw], { type: "application/json" }),
+      a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = `t-notes-backup-${today()}.json`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(`Backup exported (${s.notes.length} notes, ${s.cards.length} cards)`);
+  } catch {
+    toast("Export failed: nothing to save yet");
+  }
 };
 const impF = document.getElementById("import-file");
 document.getElementById("import").onclick = () => impF.click();
 impF.onchange = () => {
   const f = impF.files[0];
+  impF.value = "";
   if (!f) return;
   const r = new FileReader();
+  r.onerror = () => toast("Import failed: could not read file");
   r.onload = () => {
     try {
-      const d = JSON.parse(r.result);
-      if (!Array.isArray(d.notes) || !Array.isArray(d.cards)) throw 0;
-      Object.assign(s, {
-        notes: d.notes,
-        lists: d.lists && d.lists.length ? d.lists : s.lists,
-        cards: d.cards,
-        activity: [],
-      });
+      const d = normalize(JSON.parse(r.result));
+      if (!d.notes.length && !d.cards.length) throw 0;
+      Object.assign(s, d);
       save();
       renderAll();
+      toast(`Imported ${d.notes.length} notes, ${d.cards.length} cards`);
     } catch {
-      alert("Invalid backup file");
+      toast("Import failed: invalid backup file");
     }
   };
   r.readAsText(f);
-  impF.value = "";
 };
 function renderAll() {
   renderFilters();
