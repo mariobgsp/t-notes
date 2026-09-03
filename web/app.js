@@ -130,7 +130,8 @@ const filter = { label: null, tag: null };
 let openPal = null,
   showArch = false,
   showAct = false,
-  query = "";
+  query = "",
+  searchTimer = null;
 const save = () => localStorage.setItem(K, JSON.stringify(s));
 const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
@@ -140,6 +141,43 @@ function el(tag, text, cls) {
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
   return e;
+}
+// inline SVG icon set: 16px viewBox, stroke 1.5, currentColor. No emoji/dingbats.
+const PATHS = {
+  edit: "M11.3 2.9l1.8 1.8L5 12.9 2.8 13.5l.6-2.2 7.9-8.4z",
+  archive: "M2.5 5.5h11M4 5.5V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5.5M5.5 5.5v-2h5v2M6.5 9h3",
+  restore: "M5 8l3-3 3 3M8 5v6M4 12.5h8",
+  del: "M4 4.5l8 8M12 4.5l-8 8",
+  trash: "M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.5 8.5a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9l.5-8.5M6.6 7v4M9.4 7v4",
+  desc: "M2.5 4.5h11M2.5 8h7M2.5 11.5h9",
+  comment: "M2.5 3.5h11v8h-6l-3 2.5v-2.5h-2z",
+  cal: "M3 5.5h10V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 5.5V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1.5M5.5 2.5v3M10.5 2.5v3M5 8h2M9 8h2",
+  check: "M3.5 8.5l3 3 6-7",
+  open: "M2 4.5h12M2 11.5h12M2 4.5v7M14 4.5v7",
+  list: "M2.5 4h11M2.5 8h11M2.5 12h7",
+  left: "M9.5 3.5L5 8l4.5 4.5",
+  right: "M6.5 3.5L11 8l-4.5 4.5",
+  tag: "M8.5 2l5 5-6 6H2.5v-5zM5.5 6a1 1 0 1 0 0-.01",
+  convert: "M4 2.5v8M2.5 4H8M2.5 4l1.5-1.5M2.5 4L4 5.5M12 9v4.5M10.5 11H16M10.5 11l1.5-1.5M10.5 11l1.5 1.5",
+};
+function ico(name, title) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 16 16");
+  s.setAttribute("fill", "none");
+  s.setAttribute("stroke", "currentColor");
+  s.setAttribute("stroke-width", "1.5");
+  s.setAttribute("stroke-linecap", "round");
+  s.setAttribute("stroke-linejoin", "round");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", PATHS[name]);
+  s.append(p);
+  if (title) {
+    const t2 = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    t2.textContent = title;
+    s.append(t2);
+  }
+  s.setAttribute("aria-hidden", "true");
+  return s;
 }
 function log(text) {
   s.activity.unshift({ ts: Date.now(), text });
@@ -366,10 +404,11 @@ function labelRow(it) {
     d.dataset.id = it.id;
     row.append(d);
   }
-  const t = el("button", "🏷", "tagbtn");
+  const t = el("button", null, "tagbtn");
   t.title = "labels";
   t.dataset.act = "label";
   t.dataset.id = it.id;
+  t.append(ico("tag"));
   row.append(t);
   return row;
 }
@@ -434,6 +473,7 @@ filters.onclick = (e) => {
     filter.label = null;
     filter.tag = null;
     query = "";
+    clearTimeout(searchTimer);
     document.getElementById("search-input").value = "";
     renderAll();
     return;
@@ -478,16 +518,20 @@ function noteEl(n, arch) {
   col.append(labelRow(n));
   if (openPal === n.id) col.append(palRow(n));
   d.append(col);
-  const e2 = el("button", "✎", "iconbtn");
+  const e2 = el("button", null, "iconbtn");
   e2.title = "edit note";
   e2.dataset.edit = n.id;
+  e2.append(ico("edit"));
   d.append(e2);
-  const a = el("button", arch ? "↩" : "📦", "iconbtn");
+  const a = el("button", null, "iconbtn");
   a.title = arch ? "restore" : "archive";
   a.dataset.arc = n.id;
+  a.append(ico(arch ? "restore" : "archive"));
   d.append(a);
-  const b = el("button", "×", "del");
+  const b = el("button", null, "del");
+  b.title = "delete note";
   b.dataset.id = n.id;
+  b.append(ico("trash"));
   d.append(b);
   return d;
 }
@@ -499,7 +543,7 @@ function renderNotes() {
   if (!live.length && !old.length) {
     const p = el(
       "p",
-      s.notes.length ? "No matches." : "No notes yet — hit + New note.",
+      s.notes.length ? "No matches." : "No notes yet. Hit + New note.",
     );
     p.style.color = "var(--mut)";
     nl.append(p);
@@ -569,7 +613,9 @@ document.getElementById("list-form").onsubmit = (e) => {
 };
 document.getElementById("search-input").oninput = (e) => {
   query = e.target.value.trim().toLowerCase();
-  renderAll();
+  // debounce: render only after typing pauses (cheap on a big board)
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderAll, 120);
 };
 document.getElementById("show-act").onclick = (e) => {
   showAct = !showAct;
@@ -582,17 +628,25 @@ function doneCount(c) {
 }
 function cardBadges(c, row) {
   if (c.desc) {
-    row.append(el("span", "📝", "badge"));
+    const b = el("span", null, "badge");
+    b.append(ico("desc"));
+    b.title = "has description";
+    row.append(b);
   }
   if (c.checklist.length) {
     row.append(el("span", `${doneCount(c)}/${c.checklist.length}`, "badge"));
   }
   if (c.comments.length) {
-    row.append(el("span", `💬${c.comments.length}`, "badge"));
+    const b = el("span", null, "badge");
+    b.append(ico("comment"));
+    b.append(document.createTextNode(String(c.comments.length)));
+    b.title = "comments";
+    row.append(b);
   }
   if (c.due) {
     const over = !c.done && c.due < today(),
-      b = el("span", `📅${c.due}`, `badge${over ? " over" : ""}`);
+      b = el("span", c.due, `badge${over ? " over" : ""}`);
+    b.title = "due date";
     row.append(b);
   }
 }
@@ -629,27 +683,34 @@ function cardEl(c) {
   if (openPal === c.id) col.append(palRow(c));
   d.append(cb, col);
   if (i > 0) {
-    const b = el("button", "←", "mv");
+    const b = el("button", null, "mv");
     b.dataset.act = "mv";
     b.dataset.dir = "-1";
     b.dataset.id = c.id;
+    b.title = "move left";
+    b.append(ico("left"));
     d.append(b);
   }
   if (i < s.lists.length - 1) {
-    const b = el("button", "→", "mv");
+    const b = el("button", null, "mv");
     b.dataset.act = "mv";
     b.dataset.dir = "1";
     b.dataset.id = c.id;
+    b.title = "move right";
+    b.append(ico("right"));
     d.append(b);
   }
-  const o = el("button", "⧉", "iconbtn");
+  const o = el("button", null, "iconbtn");
   o.title = "open";
   o.dataset.act = "open";
   o.dataset.id = c.id;
+  o.append(ico("open"));
   d.append(o);
-  const x = el("button", "×", "del");
+  const x = el("button", null, "del");
+  x.title = "archive card";
   x.dataset.act = "del";
   x.dataset.id = c.id;
+  x.append(ico("archive"));
   d.append(x);
   return d;
 }
@@ -668,13 +729,15 @@ function renderBoard() {
     head.append(dot, h);
     const n = s.cards.filter((c) => c.list === l.id && !c.archived).length;
     head.append(el("span", String(n), "badge"));
-    const rn = el("button", "✎", "iconbtn");
+    const rn = el("button", null, "iconbtn");
     rn.title = "rename";
     rn.dataset.rn = l.id;
+    rn.append(ico("edit"));
     head.append(rn);
-    const dl = el("button", "×", "iconbtn");
+    const dl = el("button", null, "iconbtn");
     dl.title = "delete list (archives its cards)";
     dl.dataset.dl = l.id;
+    dl.append(ico("del"));
     head.append(dl);
     col.append(head);
     const wrap = el("div", null, "cards");
@@ -902,7 +965,7 @@ document.getElementById("set-test").onclick = async () => {
     key: setKey.value,
   });
   setMsg.textContent =
-    out && out.includes("OK") ? "Connected" : "Failed — check URL, model, key";
+    out && out.includes("OK") ? "Connected" : "Failed. Check URL, model, key.";
 };
 document.getElementById("set-save").onclick = () => {
   s.settings = {
@@ -1123,7 +1186,9 @@ function renderNoteDetail() {
       renderNoteDetail();
     };
     const sp = el("span", i.text, "mgrow");
-    const x = el("button", "×", "iconbtn");
+    const x = el("button", null, "iconbtn");
+    x.title = "remove item";
+    x.append(ico("del"));
     x.onclick = () => {
       n.checklist = n.checklist.filter((x) => x.id !== i.id);
       save();
@@ -1210,7 +1275,10 @@ function renderModal() {
     renderAll();
     renderModal();
   };
-  const done = el("button", c.done ? "✅ done" : "mark done", "fbtn");
+  const done = el("button", null, "fbtn");
+    done.title = c.done ? "reopen" : "mark done";
+    done.append(ico(c.done ? "restore" : "check"));
+    done.append(document.createTextNode(c.done ? " Done" : " Mark done"));
   done.onclick = () => {
     c.done = !c.done;
     save();
@@ -1280,8 +1348,9 @@ function renderModal() {
       renderModal();
     };
     const sp = el("span", i.text, "mgrow"),
-      cv = el("button", "⧉", "iconbtn");
+      cv = el("button", null, "iconbtn");
     cv.title = "convert to card";
+    cv.append(ico("convert"));
     cv.onclick = () => {
       s.cards.push({
         id: uid(),
@@ -1301,7 +1370,9 @@ function renderModal() {
       renderAll();
       renderModal();
     };
-    const x = el("button", "×", "iconbtn");
+    const x = el("button", null, "iconbtn");
+    x.title = "remove item";
+    x.append(ico("del"));
     x.onclick = () => {
       c.checklist = c.checklist.filter((x) => x.id !== i.id);
       save();

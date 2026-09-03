@@ -98,7 +98,7 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await addCard(page, "Ship v1 #work");
   const card = page.locator("#c-todo .card").first();
   await expect(card).toContainText("Ship v1");
-  await card.locator(".mv", { hasText: "→" }).click();
+  await card.locator(".mv[data-dir=\"1\"]").click();
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");
   await page
     .locator("#c-doing .card")
@@ -123,7 +123,7 @@ test("board: card lifecycle with modal", async ({ page }) => {
   const done = page.locator("#c-doing .card").first();
   await expect(done).toContainText("1/2");
   await expect(done).toContainText("2030-01-15");
-  await expect(done).toContainText("💬1");
+  await expect(done.locator(".badge", { hasText: "1" }).last()).toBeVisible();
   await page.reload();
   await page.locator("#tab-board").click();
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");

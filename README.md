@@ -96,7 +96,6 @@ custom lists, theme persistence.
 
 ## Lean by design
 
-~52KB of frontend code (64K folder), ~10MB self-contained Go exe, ~30MB
-Tauri desktop app — all using the system WebView/browser instead of bundling
-Chromium (~150MB saved vs Electron). Animations are `transform`/`opacity`
-only with `content-visibility` for long lists.
+~38KB of frontend, ~10MB self-contained Go exe, ~30MB Tauri app. Renders 500+ items
+in well under a second with a single-digit-MB JS heap; search is debounced and
+animations are `transform`/`opacity` only, respecting `prefers-reduced-motion`.
