@@ -28,9 +28,9 @@ function normalize(d) {
   d.activity = [];
   d.settings = Object.assign(
     {
-      provider: "zen",
-      baseUrl: "https://opencode.ai/zen/v1",
-      model: "big-pickle",
+      provider: "command",
+      baseUrl: "https://api.commandcode.ai/provider/v1",
+      model: "muse-spark-1.3-contributor",
       key: "",
     },
     d.settings || {},
@@ -80,6 +80,11 @@ const AI_PRESETS = {
     label: "OpenRouter (free)",
     baseUrl: "https://openrouter.ai/api/v1",
     model: "openrouter/free",
+  },
+  command: {
+    label: "Command Code",
+    baseUrl: "https://api.commandcode.ai/provider/v1",
+    model: "muse-spark-1.3-contributor",
   },
   custom: { label: "Custom", baseUrl: "", model: "" },
 };
