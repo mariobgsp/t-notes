@@ -27,7 +27,12 @@ function normalize(d) {
   d.cards = d.cards || [];
   d.activity = [];
   d.settings = Object.assign(
-    { provider: "zen", baseUrl: "https://opencode.ai/zen/v1", model: "big-pickle", key: "" },
+    {
+      provider: "zen",
+      baseUrl: "https://opencode.ai/zen/v1",
+      model: "big-pickle",
+      key: "",
+    },
     d.settings || {},
   );
   for (const n of d.notes) {
@@ -36,6 +41,7 @@ function normalize(d) {
     delete n.text;
     n.body = n.body || "";
     n.labels = n.labels || [];
+    n.checklist = n.checklist || [];
     n.archived = !!n.archived;
   }
   for (const c of d.cards) {
@@ -65,8 +71,16 @@ const COLORS = [
 ];
 // ponytail: three presets, anything else is a custom URL — new providers are config, not code
 const AI_PRESETS = {
-  zen: { label: "OpenCode Zen (free)", baseUrl: "https://opencode.ai/zen/v1", model: "big-pickle" },
-  openrouter: { label: "OpenRouter (free)", baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/free" },
+  zen: {
+    label: "OpenCode Zen (free)",
+    baseUrl: "https://opencode.ai/zen/v1",
+    model: "big-pickle",
+  },
+  openrouter: {
+    label: "OpenRouter (free)",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "openrouter/free",
+  },
   custom: { label: "Custom", baseUrl: "", model: "" },
 };
 const escHtml = (x) =>
@@ -327,7 +341,10 @@ function textWithTags(text) {
 }
 const hasTag = (text, t) => text.split(/\s+/).some((w) => w === `#${t}`);
 function matches(it) {
-  const text = `${it.title || it.text || ""} ${plain(it.body || it.desc || "")}`;
+  const cl = (it.checklist || [])
+    .map((i) => i.text)
+    .join(" ");
+  const text = `${it.title || it.text || ""} ${plain(it.body || it.desc || "")} ${cl}`;
   if (filter.label && !it.labels.includes(filter.label)) return false;
   if (filter.tag && !hasTag(text, filter.tag)) return false;
   if (query && !text.toLowerCase().includes(query)) return false;
@@ -438,6 +455,7 @@ function noteEl(n, arch) {
     col = el("div", null, "itemcol"),
     top = el("div", null, "trow"),
     sp = el("span", null, "t ntitle");
+  d.dataset.id = n.id;
   sp.append(textWithTags(n.title || "Untitled"));
   top.append(sp);
   col.append(top);
@@ -446,9 +464,20 @@ function noteEl(n, arch) {
     b.append(htmlNodes(n.body));
     col.append(b);
   }
+  if (n.checklist?.length) {
+    const bd = el("div", null, "badges");
+    bd.append(
+      el("span", `checklist ${doneCount(n)}/${n.checklist.length}`, "badge"),
+    );
+    col.append(bd);
+  }
   col.append(labelRow(n));
   if (openPal === n.id) col.append(palRow(n));
   d.append(col);
+  const e2 = el("button", "✎", "iconbtn");
+  e2.title = "edit note";
+  e2.dataset.edit = n.id;
+  d.append(e2);
   const a = el("button", arch ? "↩" : "📦", "iconbtn");
   a.title = arch ? "restore" : "archive";
   a.dataset.arc = n.id;
@@ -463,8 +492,8 @@ function renderNotes() {
   an.replaceChildren();
   const live = s.notes.filter((n) => !n.archived && matches(n)),
     old = s.notes.filter((n) => n.archived && matches(n));
-  if (!live.length) {
-    const p = el("p", s.notes.length ? "No matches." : "No notes yet.");
+  if (!live.length && !old.length) {
+    const p = el("p", s.notes.length ? "No matches." : "No notes yet — hit + New note.");
     p.style.color = "var(--mut)";
     nl.append(p);
   }
@@ -474,6 +503,11 @@ function renderNotes() {
 nl.onclick = noteClick;
 an.onclick = noteClick;
 function noteClick(e) {
+  const main = e.target.closest(".note");
+  if (main && !e.target.closest("button,input,select")) {
+    if (!window.getSelection().toString()) openNote(main.dataset.id);
+    return;
+  }
   const t = e.target.closest('[data-act="tag"]');
   if (t) {
     filter.tag = filter.tag === t.dataset.t ? null : t.dataset.t;
@@ -498,6 +532,11 @@ function noteClick(e) {
     save();
     renderAll();
     toast(n.archived ? "Note archived" : "Note restored");
+    return;
+  }
+  const ed = e.target.closest("[data-edit]");
+  if (ed) {
+    openCompose("note", ed.dataset.edit);
     return;
   }
   const b = e.target.closest(".del");
@@ -730,7 +769,9 @@ board.onclick = (e) => {
   }
 };
 // compose popup: title first, rich body, save button
+// ponytail: one dialog for new note / new card / edit note — no second modal for editing
 let composeMode = "note";
+let editId = null;
 const composeDlg = document.getElementById("compose"),
   cH = document.getElementById("compose-h"),
   cTitle = document.getElementById("compose-title"),
@@ -738,12 +779,12 @@ const composeDlg = document.getElementById("compose"),
   cListRow = document.getElementById("compose-listrow"),
   cList = document.getElementById("compose-list");
 document.getElementById("compose-tools").append(toolsEl(cText));
-function openCompose(mode) {
+function openCompose(mode, id) {
   composeMode = mode;
-  cH.textContent = mode === "note" ? "New note" : "New card";
+  editId = id || null;
+  cListRow.hidden = mode !== "card";
   cTitle.value = "";
   cText.replaceChildren();
-  cListRow.hidden = mode !== "card";
   if (mode === "card") {
     cList.replaceChildren();
     for (const l of s.lists) {
@@ -751,6 +792,17 @@ function openCompose(mode) {
       o.value = l.id;
       o.textContent = l.name;
       cList.append(o);
+    }
+  }
+  if (mode === "note" && editId) {
+    const n = s.notes.find((x) => x.id === editId);
+    cH.textContent = "Edit note";
+    cTitle.value = n.title || "";
+    cText.append(htmlNodes(n.body || ""));
+  } else {
+    cH.textContent = mode === "note" ? "New note" : "New card";
+    if (mode === "card" && !s.lists.length) {
+      cListRow.hidden = true;
     }
   }
   composeDlg.showModal();
@@ -761,14 +813,24 @@ document.getElementById("compose-save").onclick = () => {
   const t =
     cTitle.value.trim() || plain(html).trim().slice(0, 40) || "Untitled";
   if (composeMode === "note") {
-    s.notes.unshift({
-      id: uid(),
-      title: t,
-      body: html,
-      labels: [],
-      archived: false,
-    });
-    toast("Note saved");
+    const n = editId
+      ? s.notes.find((x) => x.id === editId)
+      : s.notes.find(() => false);
+    if (n) {
+      n.title = t;
+      n.body = html;
+      toast("Note updated");
+    } else {
+      s.notes.unshift({
+        id: uid(),
+        title: t,
+        body: html,
+        labels: [],
+        checklist: [],
+        archived: false,
+      });
+      toast("Note saved");
+    }
   } else {
     if (!s.lists.length) {
       toast("Add a list first");
@@ -833,9 +895,7 @@ document.getElementById("set-test").onclick = async () => {
     key: setKey.value,
   });
   setMsg.textContent =
-    out && out.includes("OK")
-      ? "Connected"
-      : "Failed — check URL, model, key";
+    out && out.includes("OK") ? "Connected" : "Failed — check URL, model, key";
 };
 document.getElementById("set-save").onclick = () => {
   s.settings = {
@@ -962,10 +1022,145 @@ board.addEventListener("drop", (e) => {
 const modal = document.getElementById("modal"),
   mb = document.getElementById("modal-body");
 let modalId = null;
+let noteDetailId = null;
+modal.addEventListener("close", () => {
+  noteDetailId = null;
+  modalId = null;
+});
 function openModal(id) {
   modalId = id;
   renderModal();
   modal.showModal();
+}
+function openNote(id) {
+  noteDetailId = id;
+  renderNoteDetail();
+  modal.showModal();
+}
+function renderNoteDetail() {
+  const n = s.notes.find((x) => x.id === noteDetailId);
+  if (!n) {
+    modal.close();
+    return;
+  }
+  mb.replaceChildren();
+  const title = document.createElement("input");
+  title.type = "text";
+  title.value = n.title || "";
+  title.onchange = () => {
+    n.title = title.value.trim() || n.title;
+    save();
+    renderAll();
+    renderNoteDetail();
+  };
+  mb.append(title);
+  mb.append(labelRow(n));
+  if (openPal === n.id) mb.append(palRow(n));
+  const body = el("div", null, "rich");
+  body.contentEditable = "true";
+  body.dataset.ph = "Note body… (select text for bold, color, size)";
+  body.append(htmlNodes(n.body));
+  mb.append(toolsEl(body));
+  mb.append(body);
+  body.oninput = () => {
+    n.body = editableHtml(body);
+    save();
+  };
+  body.onblur = () => {
+    n.body = editableHtml(body);
+    save();
+    renderAll();
+  };
+  mb.append(
+    aiRow(
+      () => ({ title: n.title, text: plain(n.body) }),
+      (kind, out) => {
+        if (kind === "checklist") {
+          for (const t of linesOf(out))
+            n.checklist.push({ id: uid(), text: t, done: false });
+        } else if (kind === "ideas") {
+          n.body =
+            n.body +
+            (n.body ? "<br>" : "") +
+            linesOf(out)
+              .map((l) => `- ${escHtml(l)}`)
+              .join("<br>");
+        } else {
+          n.body = escHtml(out).replace(/\n/g, "<br>");
+        }
+        save();
+        renderAll();
+        renderNoteDetail();
+      },
+    ),
+  );
+  // checklist with progress — identical block to card modal (parity)
+  mb.append(el("strong", `Checklist ${doneCount(n)}/${n.checklist.length}`));
+  const bar = el("div", "bar"),
+    fill = el("i");
+  fill.style.width = n.checklist.length
+    ? `${Math.round((doneCount(n) / n.checklist.length) * 100)}%`
+    : "0%";
+  bar.append(fill);
+  mb.append(bar);
+  const cl = el("div", null, "clist");
+  for (const i of n.checklist) {
+    const r = el("div", null, "mrow"),
+      cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = i.done;
+    cb.onchange = () => {
+      i.done = cb.checked;
+      save();
+      renderAll();
+      renderNoteDetail();
+    };
+    const sp = el("span", i.text, "mgrow");
+    const x = el("button", "×", "iconbtn");
+    x.onclick = () => {
+      n.checklist = n.checklist.filter((x) => x.id !== i.id);
+      save();
+      renderAll();
+      renderNoteDetail();
+    };
+    r.append(cb, sp, x);
+    cl.append(r);
+  }
+  mb.append(cl);
+  const add = el("div", null, "mrow"),
+    ai = document.createElement("input");
+  ai.type = "text";
+  ai.placeholder = "Add checklist item… (Enter for batch lines)";
+  ai.onkeydown = (ev) => {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    for (const line of ai.value.split("\n")) {
+      const t = line.trim();
+      if (t) n.checklist.push({ id: uid(), text: t, done: false });
+    }
+    save();
+    renderAll();
+    renderNoteDetail();
+  };
+  add.append(ai);
+  mb.append(add);
+  const foot = el("div", null, "mrow"),
+    edit = el("button", "edit in popup", "fbtn");
+  edit.onclick = () => {
+    modal.close();
+    openCompose("note", n.id);
+  };
+  const arc = el("button", "archive", "fbtn");
+  arc.onclick = () => {
+    n.archived = true;
+    save();
+    modal.close();
+    renderAll();
+  };
+  const close = el("button", "close", "fbtn");
+  close.onclick = () => modal.close();
+  foot.append(edit, arc, close);
+  mb.append(foot);
 }
 function renderModal() {
   const c = s.cards.find((x) => x.id === modalId);
@@ -1175,17 +1370,21 @@ mb.onclick = (e) => {
   const p = e.target.closest('[data-act="pick"]');
   if (p) {
     toggleLabel(p.dataset.id, p.dataset.c);
-    renderModal();
+    rerender();
     return;
   }
   const l = e.target.closest('[data-act="label"]');
   if (l) {
     openPal = openPal === l.dataset.id ? null : l.dataset.id;
-    renderModal();
+    rerender();
     renderAll();
     return;
   }
 };
+function rerender() {
+  if (noteDetailId) renderNoteDetail();
+  else renderModal();
+}
 // auto-startup (Tauri desktop or Go host) + local JSON backup
 // ponytail: Tauri invoke called directly, no npm plugin wrapper until it earns it
 const stBtn = document.getElementById("startup");

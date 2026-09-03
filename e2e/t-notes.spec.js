@@ -55,6 +55,45 @@ test("notes: label strips work", async ({ page }) => {
   await expect(note.locator(".strip").first()).toBeVisible();
 });
 
+test("notes: click opens detail with checklist parity", async ({ page }) => {
+  await addNote(page, "Pack", "Trip stuff");
+  await page.locator("#notes .note .ntitle").first().click();
+  const m = page.locator("#modal-body");
+  await expect(m.locator(".rich")).toContainText("Trip stuff");
+  await m.getByPlaceholder(/Add checklist item/).fill("Passport");
+  await m.getByPlaceholder(/Add checklist item/).press("Enter");
+  await m.getByPlaceholder(/Add checklist item/).fill("Tickets");
+  await m.getByPlaceholder(/Add checklist item/).press("Enter");
+  await expect(m.locator(".clist .mrow")).toHaveCount(2);
+  await m.locator('.clist .mrow input[type="checkbox"]').first().check();
+  await m.locator("text=close").click();
+  const note = page.locator("#notes .note").first();
+  await expect(note).toContainText("Pack");
+  await page.reload();
+  await page.locator("#notes .note .ntitle").first().click();
+  await expect(page.locator("#modal-body .clist .mrow")).toHaveCount(2);
+  await expect(
+    page.locator("#modal-body .clist .mrow input").first(),
+  ).toBeChecked();
+});
+
+test("notes: edit popup prefills and updates", async ({ page }) => {
+  await addNote(page, "Draft", "v1 body");
+  const note = page.locator("#notes .note").first();
+  await note.locator("[data-edit]").click();
+  await expect(page.locator("#compose-h")).toHaveText("Edit note");
+  await expect(page.locator("#compose-title")).toHaveValue("Draft");
+  await expect(page.locator("#compose-text")).toContainText("v1 body");
+  await page.locator("#compose-title").fill("Draft v2");
+  await page.locator("#compose-text").fill("v2 body");
+  await page.locator("#compose-save").click();
+  const updated = page.locator("#notes .note").first();
+  await expect(updated).toContainText("Draft v2");
+  await expect(updated.locator(".nbody")).toContainText("v2 body");
+  await page.reload();
+  await expect(page.locator("#notes .note").first()).toContainText("Draft v2");
+});
+
 test("board: card lifecycle with modal", async ({ page }) => {
   await addCard(page, "Ship v1 #work");
   const card = page.locator("#c-todo .card").first();
