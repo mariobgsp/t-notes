@@ -341,9 +341,7 @@ function textWithTags(text) {
 }
 const hasTag = (text, t) => text.split(/\s+/).some((w) => w === `#${t}`);
 function matches(it) {
-  const cl = (it.checklist || [])
-    .map((i) => i.text)
-    .join(" ");
+  const cl = (it.checklist || []).map((i) => i.text).join(" ");
   const text = `${it.title || it.text || ""} ${plain(it.body || it.desc || "")} ${cl}`;
   if (filter.label && !it.labels.includes(filter.label)) return false;
   if (filter.tag && !hasTag(text, filter.tag)) return false;
@@ -493,7 +491,10 @@ function renderNotes() {
   const live = s.notes.filter((n) => !n.archived && matches(n)),
     old = s.notes.filter((n) => n.archived && matches(n));
   if (!live.length && !old.length) {
-    const p = el("p", s.notes.length ? "No matches." : "No notes yet — hit + New note.");
+    const p = el(
+      "p",
+      s.notes.length ? "No matches." : "No notes yet — hit + New note.",
+    );
     p.style.color = "var(--mut)";
     nl.append(p);
   }

@@ -1,6 +1,6 @@
 # t-notes
 
-<img src="web/logo.svg" alt="t-notes pixel logo" width="64" height="64">
+<img src="web/logo.svg" alt="t-notes logo" width="64" height="64">
 
 Local-first, single-user notes + kanban board. Trello's core, none of its cloud — zero dependencies, tiny RAM.
 
