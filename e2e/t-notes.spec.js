@@ -57,6 +57,13 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");
 });
 
+test("guide dialog opens and closes", async ({ page }) => {
+  await page.locator("#guide").click();
+  await expect(page.locator("#guide-modal")).toContainText("t-notes guide");
+  await page.locator("#guide-close").click();
+  await expect(page.locator("#guide-modal")).toBeHidden();
+});
+
 test("search, lists, theme", async ({ page }) => {
   await page.locator("#tab-board").click();
   await page.locator("#card-input").fill("Alpha task");

@@ -12,7 +12,7 @@
 <header>
 <img src="logo.svg" alt="t-notes logo" width="24" height="24"><strong>t-notes</strong>
 <nav><button id="tab-notes" class="tab on">Notes</button><button id="tab-board" class="tab">Board</button></nav>
-<button id="startup" class="hbtn" title="start with Windows" hidden>⏻</button><button id="export" class="hbtn" title="export backup (JSON)">⤓</button><button id="import" class="hbtn" title="import backup (JSON)">⤒</button><input type="file" id="import-file" accept="application/json,.json" hidden><button id="theme" title="toggle theme">◐</button>
+<button id="guide" class="hbtn" title="guide" style="font-weight:700">?</button><button id="startup" class="hbtn" title="start with Windows" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 1.5v6"/><path d="M4.8 4a6 6 0 1 0 6.4 0"/></svg></button><button id="export" class="hbtn" title="export backup (JSON)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8m0 0L5 7m3 3 3-3"/><path d="M2.5 13.5h11"/></svg></button><button id="import" class="hbtn" title="import backup (JSON)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2m0 0L5 5m3-3 3 3"/><path d="M2.5 13.5h11"/></svg></button><input type="file" id="import-file" accept="application/json,.json" hidden><button id="theme" class="hbtn" title="toggle theme"><svg class="sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13"/></svg><svg class="moon" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button>
 </header>
 <div id="filters"></div>
 <main>
@@ -31,7 +31,7 @@
 <div id="activity" hidden></div>
 </section>
 </main>
-<dialog id="modal"><div id="modal-body"></div></dialog>
+<dialog id="guide-modal"><div id="guide-body"><h2>t-notes guide</h2><h3>Notes</h3><p>Write it, hit Add. Click a <b>#tag</b> to filter by it. The label icon opens the color palette. Archive with the box icon; restore from <i>show archived</i>.</p><h3>Board</h3><p>Cards live in lists — add, rename, or delete lists freely. Drag cards between lists or use the arrow buttons. Tick the checkbox to mark done.</p><h3>Card detail</h3><p>Click the grid icon on any card: description, checklist with progress bar, due date (overdue turns red), comments, labels. Paste multiple lines into the checklist field to add them in bulk.</p><h3>Find things</h3><p>Search box, color dots, and #tags all combine as filters. The row under the header shows what is active — <i>clear</i> resets.</p><h3>Your data</h3><p>Everything lives in this browser only (<i>localStorage</i>). Use the download button for a JSON backup and the upload button to restore it.</p><h3>Desktop</h3><p>The power button toggles launch-on-login (Windows builds). The moon/sun button switches theme.</p><p><button id="guide-close">Close</button></p></div></dialog><dialog id="modal"><div id="modal-body"></div></dialog>
 <script src="app.js"></script>
 </body>
 </html>

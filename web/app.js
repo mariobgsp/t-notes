@@ -75,6 +75,10 @@ tb.onclick = () => {
   tb.classList.add("on");
   tn.classList.remove("on");
 };
+document.getElementById("guide").onclick = () =>
+  document.getElementById("guide-modal").showModal();
+document.getElementById("guide-close").onclick = () =>
+  document.getElementById("guide-modal").close();
 document.getElementById("theme").onclick = () => {
   const r = document.documentElement,
     d = r.dataset.theme === "dark" ? "light" : "dark";
