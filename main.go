@@ -5,6 +5,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -45,6 +46,7 @@ func hasFlag(f string) bool {
 // serve starts the local server and opens the default browser.
 func serve(quiet bool) {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/startup", startupHandler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimPrefix(r.URL.Path, "/")
 		if p == "" {
@@ -121,6 +123,32 @@ func uninstall() {
 func createShortcut(lnk, target, workdir string) error {
 	ps := fmt.Sprintf(`$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%s'); $sc.TargetPath = '%s'; $sc.WorkingDirectory = '%s'; $sc.Description = 't-notes — notes + kanban'; $sc.Save()`, lnk, target, workdir)
 	return exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run()
+}
+
+func startupLnk() string {
+	return filepath.Join(os.Getenv("AppData"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "t-notes.lnk")
+}
+
+func startupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		var req struct{ Enabled bool }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if req.Enabled {
+			exe, _ := os.Executable()
+			if err := createShortcut(startupLnk(), exe, filepath.Dir(exe)); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			os.Remove(startupLnk())
+		}
+	}
+	_, err := os.Stat(startupLnk())
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"enabled": err == nil})
 }
 
 func sameFile(a, b string) bool {

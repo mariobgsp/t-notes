@@ -758,6 +758,59 @@ mb.onclick = (e) => {
     return;
   }
 };
+// auto-startup (Windows host only) + local JSON backup
+const stBtn = document.getElementById("startup");
+fetch("api/startup")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((j) => {
+    if (!j) return;
+    stBtn.hidden = false;
+    stBtn.dataset.on = j.enabled ? "1" : "";
+    stBtn.onclick = () =>
+      fetch("api/startup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: stBtn.dataset.on !== "1" }),
+      })
+        .then((r) => r.json())
+        .then((k) => {
+          stBtn.dataset.on = k.enabled ? "1" : "";
+        });
+  })
+  .catch(() => {});
+document.getElementById("export").onclick = () => {
+  const b = new Blob([localStorage.getItem(K)], { type: "application/json" }),
+    a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = `t-notes-backup-${today()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+const impF = document.getElementById("import-file");
+document.getElementById("import").onclick = () => impF.click();
+impF.onchange = () => {
+  const f = impF.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.notes) || !Array.isArray(d.cards)) throw 0;
+      Object.assign(s, {
+        notes: d.notes,
+        lists: d.lists && d.lists.length ? d.lists : s.lists,
+        cards: d.cards,
+        activity: [],
+      });
+      save();
+      renderAll();
+    } catch {
+      alert("Invalid backup file");
+    }
+  };
+  r.readAsText(f);
+  impF.value = "";
+};
 function renderAll() {
   renderFilters();
   renderNotes();

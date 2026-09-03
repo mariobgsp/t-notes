@@ -35,6 +35,9 @@ sh build-windows.sh   # needs only Go → dist/t-notes.exe + dist/t-notes-setup.
   `%LocalAppData%\t-notes`, creates **Desktop + Start Menu shortcuts**, launches.
 - `t-notes.exe` also runs portable (no install).
 - Uninstall: `t-notes.exe --uninstall`, then delete `%LocalAppData%\t-notes`.
+- **Auto-startup:** ⏻ button in the header toggles launch-on-login (Windows
+  Startup shortcut; highlighted blue when on).
+- **Backup:** ⤓ exports all data as JSON, ⤒ restores it.
 
 ## Layout
 
