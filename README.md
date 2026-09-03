@@ -49,6 +49,15 @@ sh build-windows.sh   # needs only Go → dist/t-notes.exe + dist/t-notes-setup.
 | `main.go` | Windows host: local server + self-installer with shortcuts |
 | `build-windows.sh` | `GOOS=windows go build` cross-compile from Linux |
 
+## Tests
+
+```sh
+cd e2e && npm install && npx playwright test   # system Chromium, no browser downloads
+```
+
+Covers: notes add/tag/persist, card lifecycle (move, modal, checklist, due,
+labels, comments), search, custom lists, theme persistence.
+
 ## Lean by design
 
 ~25KB frontend, ~9MB self-contained exe, uses the system's browser instead of

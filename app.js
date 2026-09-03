@@ -432,6 +432,7 @@ function renderBoard() {
     head.append(dl);
     col.append(head);
     const wrap = el("div", null, "cards");
+    wrap.id = `c-${l.id}`;
     wrap.dataset.list = l.id;
     for (const c of s.cards.filter(
       (x) => x.list === l.id && !x.archived && matches(x),
@@ -718,6 +719,7 @@ function renderModal() {
     if (ev.key !== "Enter" || !ci2.value.trim()) return;
     c.comments.push({ id: uid(), text: ci2.value.trim(), ts: Date.now() });
     save();
+    renderAll();
     renderModal();
   };
   cm.append(ci2);
