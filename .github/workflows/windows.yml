@@ -31,4 +31,4 @@ jobs:
           tagName: t-notes-v__VERSION__
           releaseName: "t-notes v__VERSION__"
           releaseBody: "Windows installer (NSIS) with Start Menu + Desktop shortcuts."
-          releaseDraft: true
+          releaseDraft: false
