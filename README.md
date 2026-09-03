@@ -7,14 +7,16 @@ Local-first, single-user notes + kanban board. Trello's core, none of its cloud 
 ## Features
 
 - **Notes** — `+ New note` popup: title first, rich text (bold, italic,
-  color, size). ✎ reopens the popup to **edit**; clicking the note opens a
-  **detail dialog** (body + checklist + progress) — same todo-list power as
-  cards. Archive, color labels, `#tags`
+  color, size), optional **board List** (a listed note also appears as a
+  board card; same item, both views, edits sync). ✎ reopens the popup to
+  **edit**; clicking the note opens a **detail dialog** (body + checklist +
+  progress, list picker, image attachments). Archive, color labels, `#tags`
 - **Board** — Jira-style color-coded lists (create with the *New list…* box,
-  rename ✎ / delete ×), cards with detail view: rich description, checklist +
+  rename ✎ / delete ×). Cards with detail view: rich description, checklist +
   progress bar, due dates + overdue highlight, comments, label strips,
-  `#tags`, drag & drop + ←/→ move. `+ New card` popup has a **List** picker
-  for which column the card starts in
+  `#tags`, drag & drop + ←/→ move. Notes pinned to a list render as cards
+  too (draggable between columns). Both support **image attachments**
+  (compressed locally, click to view full-size)
 - **Search + filter** — text search, label and `#tag` filters
 - **Archive + activity log**, checklist-item → card conversion
 - **Toasts** confirm every action; **?** button opens the in-app guide

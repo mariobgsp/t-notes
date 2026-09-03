@@ -43,6 +43,8 @@ function normalize(d) {
     n.labels = n.labels || [];
     n.checklist = n.checklist || [];
     n.suggest = n.suggest || [];
+    n.images = n.images || [];
+    n.list = n.list ?? null;
     n.archived = !!n.archived;
   }
   for (const c of d.cards) {
@@ -56,6 +58,7 @@ function normalize(d) {
     c.checklist = c.checklist || [];
     c.comments = c.comments || [];
     c.suggest = c.suggest || [];
+    c.images = c.images || [];
     c.due = c.due || null;
     c.archived = !!c.archived;
   }
@@ -134,7 +137,13 @@ let openPal = null,
   showAct = false,
   query = "",
   searchTimer = null;
-const save = () => localStorage.setItem(K, JSON.stringify(s));
+const save = () => {
+  try {
+    localStorage.setItem(K, JSON.stringify(s));
+  } catch {
+    toast("Storage full: remove an image, then retry");
+  }
+};
 const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
 const today = () => new Date().toISOString().slice(0, 10);
@@ -164,6 +173,7 @@ const PATHS = {
   tag: "M8.5 2l5 5-6 6H2.5v-5zM5.5 6a1 1 0 1 0 0-.01",
   convert:
     "M4 2.5v8M2.5 4H8M2.5 4l1.5-1.5M2.5 4L4 5.5M12 9v4.5M10.5 11H16M10.5 11l1.5-1.5M10.5 11l1.5 1.5",
+  img: "M3 3.5h10a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1zM2.5 11l3.5-3.5 2.5 2.5 2-2L14 11.5M6 7a1 1 0 1 0 0-.01",
 };
 function ico(name, title) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -279,6 +289,141 @@ function editableHtml(editable) {
     .replace(/<\/div>$/, "");
 }
 const plain = (h) => String(h ?? "").replace(/<[^>]*>/g, " ");
+// images: compressed dataURL attachments, localStorage-safe.
+// Ponytail: one rung — canvas downscale (max 1280) + JPEG 0.82 unless the
+// file is already small, plus a try/catch quota guard in save().
+function compressImage(file) {
+  return new Promise((res, rej) => {
+    if (!file.type.startsWith("image/")) return rej(new Error("not image"));
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const m = Math.max(im.width, im.height);
+        const small = file.size < 350 * 1024 && m <= 1280;
+        if (small) {
+          const r = new FileReader();
+          r.onload = () => {
+            URL.revokeObjectURL(url);
+            res(r.result);
+          };
+          r.onerror = () => rej(new Error("read"));
+          r.readAsDataURL(file);
+          return;
+        }
+        const k = Math.min(1, 1280 / m);
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(im.width * k);
+        cv.height = Math.round(im.height * k);
+        cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        res(cv.toDataURL("image/jpeg", 0.82));
+      } catch (e) {
+        rej(e);
+      }
+    };
+    im.onerror = () => rej(new Error("decode"));
+    im.src = url;
+  });
+}
+let imgTarget = null; // {push: (img)=>void, done: ()=>void} set before picker opens
+function openImgPicker(target) {
+  imgTarget = target;
+  const inp = document.getElementById("img-pick");
+  inp.value = "";
+  inp.click();
+}
+document.getElementById("img-pick").addEventListener("change", async (e) => {
+  const t = imgTarget;
+  imgTarget = null;
+  if (!t) return;
+  const files = [...e.target.files].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  let added = 0;
+  for (const f of files.slice(0, 8)) {
+    try {
+      const url = await compressImage(f);
+      t.push({
+        id: uid(),
+        name: f.name || "image",
+        url,
+      });
+      added++;
+    } catch {
+      toast(`Skipped ${f.name || "file"}: not a readable image`);
+    }
+  }
+  if (added) {
+    save();
+    t.done();
+  }
+});
+function detailGallery(it, rerender) {
+  it.images = it.images || [];
+  const wrap = el("div", null, "imgsec"),
+    head = el("div", null, "mrow"),
+    lab = el("span", `Images (${it.images.length})`, "badge"),
+    add = el("button", "Attach image", "fbtn");
+  add.onclick = () =>
+    openImgPicker({
+      push: (im2) => it.images.push(im2),
+      done: () => {
+        rerender();
+      },
+    });
+  head.append(lab, add);
+  wrap.append(head);
+  if (it.images.length) {
+    const row = el("div", null, "thumbs");
+    for (const im2 of it.images) {
+      const w = el("div", null, "thumbw");
+      w.append(thumbEl(im2));
+      const x = el("button", null, "iconbtn");
+      x.title = "remove image";
+      x.append(ico("del"));
+      x.onclick = () => {
+        it.images = it.images.filter((z) => z.id !== im2.id);
+        save();
+        rerender();
+      };
+      w.append(x);
+      row.append(w);
+    }
+    wrap.append(row);
+  }
+  mb.append(wrap);
+}
+function thumbEl(im2) {
+  const im = document.createElement("img");
+  im.className = "thumb";
+  im.src = im2.url;
+  im.alt = im2.name || "attached image";
+  im.loading = "lazy";
+  im.onclick = (ev) => {
+    ev.stopPropagation();
+    const v = document.getElementById("viewer-img");
+    v.src = im2.url;
+    v.alt = im2.name || "attached image";
+    document.getElementById("viewer").showModal();
+  };
+  return im;
+}
+function imgRow(images, onRemove) {
+  const row = el("div", null, "thumbs");
+  for (const im2 of images || []) {
+    const w = el("div", null, "thumbw");
+    w.append(thumbEl(im2));
+    if (onRemove) {
+      const x = el("button", null, "iconbtn");
+      x.title = "remove image";
+      x.append(ico("del"));
+      x.onclick = () => onRemove(im2.id);
+      w.append(x);
+    }
+    row.append(w);
+  }
+  return row;
+}
 // shared B / I / color / size toolbar for any contenteditable
 function wireTools(tools, editable) {
   let saved = null;
@@ -520,6 +665,11 @@ function noteEl(n, arch) {
     );
     col.append(bd);
   }
+  if (n.images?.length) {
+    col.append(imgRow(n.images.slice(0, 4), null));
+    if (n.images.length > 4)
+      col.append(el("span", `+${n.images.length - 4} more`, "badge"));
+  }
   col.append(labelRow(n));
   if (openPal === n.id) col.append(palRow(n));
   d.append(col);
@@ -558,11 +708,19 @@ function renderNotes() {
 }
 nl.onclick = noteClick;
 an.onclick = noteClick;
+let dragNoteJustDropped = false; // suppress detail-open on the click after a note drag
 function noteClick(e) {
+  handleNote(e);
+}
+function handleNote(e) {
   const main = e.target.closest(".note");
-  if (main && !e.target.closest("button,input,select")) {
+  if (main && !e.target.closest("button,input,select,img.thumb")) {
+    if (dragNoteJustDropped) {
+      dragNoteJustDropped = false;
+      return true;
+    }
     if (!window.getSelection().toString()) openNote(main.dataset.id);
-    return;
+    return true;
   }
   const t = e.target.closest('[data-act="tag"]');
   if (t) {
@@ -674,6 +832,11 @@ function cardEl(c) {
   const bg = el("div", null, "badges");
   cardBadges(c, bg);
   if (bg.children.length) col.append(bg);
+  if (c.images?.length) {
+    col.append(imgRow(c.images.slice(0, 4), null));
+    if (c.images.length > 4)
+      col.append(el("span", `+${c.images.length - 4} more`, "badge"));
+  }
   if (c.checklist.length) {
     const bar = el(
         "div",
@@ -732,7 +895,9 @@ function renderBoard() {
     dot.style.background = acc;
     dot.style.cursor = "default";
     head.append(dot, h);
-    const n = s.cards.filter((c) => c.list === l.id && !c.archived).length;
+    const n =
+      s.cards.filter((c) => c.list === l.id && !c.archived).length +
+      s.notes.filter((x) => x.list === l.id && !x.archived).length;
     head.append(el("span", String(n), "badge"));
     const rn = el("button", null, "iconbtn");
     rn.title = "rename";
@@ -752,6 +917,14 @@ function renderBoard() {
       (x) => x.list === l.id && !x.archived && matches(x),
     ))
       wrap.append(cardEl(c));
+    // notes pinned to this list appear as cards — same item, both views
+    for (const x of s.notes.filter(
+      (y) => y.list === l.id && !y.archived && matches(y),
+    )) {
+      const ne = noteEl(x, false);
+      ne.draggable = true;
+      wrap.append(ne);
+    }
     col.append(wrap);
     board.append(col);
   }
@@ -767,6 +940,10 @@ function renderBoard() {
   }
 }
 board.onclick = (e) => {
+  if (e.target.closest(".note")) {
+    handleNote(e);
+    return;
+  }
   const t = e.target.closest('[data-act="tag"]');
   if (t) {
     filter.tag = filter.tag === t.dataset.t ? null : t.dataset.t;
@@ -809,6 +986,8 @@ board.onclick = (e) => {
     if (!confirm(`Delete list “${l.name}”? Its cards will be archived.`))
       return;
     for (const c of s.cards.filter((x) => x.list === l.id)) c.archived = true;
+    // notes pinned to the list fall back to Notes-only instead of vanishing
+    for (const x of s.notes.filter((y) => y.list === l.id)) x.list = null;
     s.lists = s.lists.filter((x) => x.id !== l.id);
     log(`deleted list “${l.name}”`);
     save();
@@ -848,6 +1027,38 @@ board.onclick = (e) => {
 let composeMode = "note";
 let editId = null;
 let composeItems = []; // pending checklist items, shown as real checkboxes pre-save
+let composeImages = []; // pending image attachments, shown as thumbnails pre-save
+function renderComposeImgs() {
+  const box = document.getElementById("compose-imgs"),
+    cnt = document.getElementById("compose-icount");
+  box.replaceChildren();
+  box.hidden = composeImages.length === 0;
+  cnt.hidden = composeImages.length === 0;
+  if (!composeImages.length) return;
+  cnt.textContent = String(composeImages.length);
+  for (const im2 of composeImages) {
+    const w = el("div", null, "thumbw");
+    w.append(thumbEl(im2));
+    const x = el("button", null, "iconbtn");
+    x.title = "remove image";
+    x.append(ico("del"));
+    x.onclick = () => {
+      composeImages = composeImages.filter((z) => z !== im2);
+      renderComposeImgs();
+    };
+    w.append(x);
+    box.append(w);
+  }
+}
+document.getElementById("compose-attach").onclick = () =>
+  openImgPicker({
+    push: (im2) => {
+      composeImages.push(im2);
+    },
+    done: () => renderComposeImgs(),
+  });
+document.getElementById("viewer-close").onclick = () =>
+  document.getElementById("viewer").close();
 const composeDlg = document.getElementById("compose"),
   cH = document.getElementById("compose-h"),
   cTitle = document.getElementById("compose-title"),
@@ -894,19 +1105,27 @@ function addComposeItems(texts) {
 function openCompose(mode, id) {
   composeMode = mode;
   editId = id || null;
-  cListRow.hidden = mode !== "card";
   cTitle.value = "";
   cText.replaceChildren();
   composeItems = [];
-  if (mode === "card") {
-    cList.replaceChildren();
-    for (const l of s.lists) {
-      const o = document.createElement("option");
-      o.value = l.id;
-      o.textContent = l.name;
-      cList.append(o);
-    }
+  composeImages = [];
+  renderComposeImgs();
+  // List picker: required for cards (destination column), optional for notes
+  // (a note with a list also appears as a board card in that column).
+  cList.replaceChildren();
+  if (mode === "note") {
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "Notes only";
+    cList.append(none);
   }
+  for (const l of s.lists) {
+    const o = document.createElement("option");
+    o.value = l.id;
+    o.textContent = l.name;
+    cList.append(o);
+  }
+  cListRow.hidden = mode === "card" && !s.lists.length;
   const existing = editId
     ? (mode === "note" ? s.notes : s.cards).find((x) => x.id === editId)
     : null;
@@ -915,9 +1134,12 @@ function openCompose(mode, id) {
     cTitle.value = existing.title || "";
     cText.append(htmlNodes(existing.body || existing.desc || ""));
     composeItems = (existing.checklist || []).map((z) => ({ ...z }));
+    composeImages = (existing.images || []).map((z) => ({ ...z }));
+    if (mode === "note") cList.value = existing.list || "";
+    else if (existing.list) cList.value = existing.list;
+    renderComposeImgs();
   } else {
     cH.textContent = mode === "note" ? "New note" : "New card";
-    if (mode === "card" && !s.lists.length) cListRow.hidden = true;
   }
   renderComposeClist();
   composeDlg.showModal();
@@ -935,6 +1157,8 @@ document.getElementById("compose-save").onclick = () => {
       n.title = t;
       n.body = html;
       n.checklist = composeItems.map((z) => ({ ...z }));
+      n.images = composeImages.map((z) => ({ ...z }));
+      n.list = cList.value || null;
       toast("Note updated");
     } else {
       s.notes.unshift({
@@ -943,6 +1167,8 @@ document.getElementById("compose-save").onclick = () => {
         body: html,
         labels: [],
         checklist: composeItems.map((z) => ({ ...z })),
+        images: composeImages.map((z) => ({ ...z })),
+        list: cList.value || null,
         suggest: [],
         archived: false,
       });
@@ -954,13 +1180,12 @@ document.getElementById("compose-save").onclick = () => {
       toast("Add a list first");
       return;
     }
-    const existing = editId
-      ? s.cards.find((x) => x.id === editId)
-      : null;
+    const existing = editId ? s.cards.find((x) => x.id === editId) : null;
     if (existing) {
       existing.title = t;
       existing.desc = html;
       existing.checklist = composeItems.map((z) => ({ ...z }));
+      existing.images = composeImages.map((z) => ({ ...z }));
       log(`edited “${t}”`);
       toast("Card updated");
     } else {
@@ -972,6 +1197,7 @@ document.getElementById("compose-save").onclick = () => {
         list: cList.value || s.lists[0].id,
         labels: [],
         checklist: composeItems.map((z) => ({ ...z })),
+        images: composeImages.map((z) => ({ ...z })),
         comments: [],
         suggest: [],
         due: null,
@@ -1071,7 +1297,9 @@ async function suggestAuto(it) {
   if (!s.settings.key || it.suggest?.length) return;
   const text = `${it.title || ""}\n${plain(it.body || it.desc || "")}`.trim();
   if (!plain(text).trim()) return;
-  it.suggest = [{ id: uid(), text: "Asking AI for next steps…", state: "busy" }];
+  it.suggest = [
+    { id: uid(), text: "Asking AI for next steps…", state: "busy" },
+  ];
   const budget = Math.min(8000, Math.round(4000 + text.length * 0.4));
   const out = await aiChat(AI_PROMPTS.ideas(text), budget);
   if (out == null) {
@@ -1079,7 +1307,11 @@ async function suggestAuto(it) {
     save();
     return;
   }
-  it.suggest = linesOf(out).map((t) => ({ id: uid(), text: t, state: "pending" }));
+  it.suggest = linesOf(out).map((t) => ({
+    id: uid(),
+    text: t,
+    state: "pending",
+  }));
   save();
 }
 function renderSuggests(it, cont) {
@@ -1175,11 +1407,21 @@ document.getElementById("compose-ai").append(
 );
 // native HTML5 drag & drop, zero deps
 let dragId = null;
+let dragNoteId = null;
 board.addEventListener("dragstart", (e) => {
   const card = e.target.closest("[data-cid]");
-  if (!card) return;
-  dragId = card.dataset.cid;
-  e.dataTransfer.effectAllowed = "move";
+  if (card) {
+    dragId = card.dataset.cid;
+    dragNoteId = null;
+    e.dataTransfer.effectAllowed = "move";
+    return;
+  }
+  const note = e.target.closest(".note");
+  if (note && note.dataset.id) {
+    dragNoteId = note.dataset.id;
+    dragId = null;
+    e.dataTransfer.effectAllowed = "move";
+  }
 });
 board.addEventListener("dragover", (e) => {
   const w = e.target.closest(".cards");
@@ -1193,20 +1435,33 @@ board.addEventListener("dragleave", (e) => {
 });
 board.addEventListener("drop", (e) => {
   const w = e.target.closest(".cards");
-  if (!w || !dragId) return;
+  if (!w || (!dragId && !dragNoteId)) return;
   e.preventDefault();
   document
     .querySelectorAll(".col.drop")
     .forEach((x) => x.classList.remove("drop"));
-  const c = s.cards.find((x) => x.id === dragId);
+  const c = dragId ? s.cards.find((x) => x.id === dragId) : null;
+  const n = dragNoteId ? s.notes.find((x) => x.id === dragNoteId) : null;
   if (c && c.list !== w.dataset.list) {
     c.list = w.dataset.list;
     const l = s.lists.find((x) => x.id === w.dataset.list);
     log(`moved “${c.title}” → ${l.name}`);
     save();
     renderAll();
+  } else if (n && n.list !== w.dataset.list) {
+    // suppress the synthetic click a drag leaves behind (self-clears)
+    dragNoteJustDropped = true;
+    setTimeout(() => {
+      dragNoteJustDropped = false;
+    }, 200);
+    n.list = w.dataset.list;
+    const l = s.lists.find((x) => x.id === w.dataset.list);
+    log(`moved “${n.title}” → ${l.name}`);
+    save();
+    renderAll();
   }
   dragId = null;
+  dragNoteId = null;
 });
 // ---- card modal (native <dialog>, Trello card back) ----
 const modal = document.getElementById("modal"),
@@ -1244,6 +1499,30 @@ function renderNoteDetail() {
     renderNoteDetail();
   };
   mb.append(title);
+  const bls = el("div", null, "mrow"),
+    blab = el("span", "Board list", "badge");
+  const bl = document.createElement("select");
+  const bnone = document.createElement("option");
+  bnone.value = "";
+  bnone.textContent = "Notes only";
+  bl.append(bnone);
+  for (const l of s.lists) {
+    const o = document.createElement("option");
+    o.value = l.id;
+    o.textContent = l.name;
+    bl.append(o);
+  }
+  bl.value = n.list || "";
+  bl.onchange = () => {
+    n.list = bl.value || null;
+    const l = s.lists.find((x) => x.id === bl.value);
+    if (l) log(`moved “${n.title}” → ${l.name}`);
+    save();
+    renderAll();
+    renderNoteDetail();
+  };
+  bls.append(blab, bl);
+  mb.append(bls);
   mb.append(labelRow(n));
   if (openPal === n.id) mb.append(palRow(n));
   renderSuggests(n, () => renderNoteDetail());
@@ -1253,6 +1532,7 @@ function renderNoteDetail() {
   body.append(htmlNodes(n.body));
   mb.append(toolsEl(body));
   mb.append(body);
+  detailGallery(n, () => renderNoteDetail());
   body.oninput = () => {
     n.body = editableHtml(body);
     save();
@@ -1452,6 +1732,7 @@ function renderModal() {
       },
     ),
   );
+  detailGallery(c, () => renderModal());
   desc.oninput = () => {
     c.desc = editableHtml(desc);
     save();

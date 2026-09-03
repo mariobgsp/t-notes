@@ -246,3 +246,99 @@ test("ai: missing key opens settings", async ({ page }) => {
   await page.locator('#compose-ai button:has-text("Summarize")').click();
   await expect(page.locator("#settings")).toContainText("AI settings");
 });
+
+test("notes: pin to board list via compose, move via detail, unpin", async ({ page }) => {
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill("Pinned note");
+  await page.locator("#compose-text").fill("body here");
+  const opts = await page.locator("#compose-list option").allTextContents();
+  expect(opts[0]).toContain("Notes only");
+  await page.locator("#compose-list").selectOption({ index: 1 });
+  await page.locator("#compose-save").click();
+  await page.locator("#tab-board").click();
+  await expect(page.locator("#c-todo .note").first()).toContainText(
+    "Pinned note",
+  );
+  await page.locator("#c-todo .note .ntitle").first().click();
+  await page.waitForTimeout(300);
+  await page.locator("#modal-body select").first().selectOption({ index: 2 });
+  await page.waitForTimeout(300);
+  await expect(page.locator("#c-doing .note").first()).toContainText(
+    "Pinned note",
+  );
+  await page.locator("#modal button:has-text('close')").click();
+  await page.locator("#tab-notes").click();
+  await expect(page.locator("#notes .note").first()).toContainText(
+    "Pinned note",
+  );
+  const list = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("t-notes-v1")).notes[0].list,
+  );
+  expect(list).toBe("doing");
+});
+
+test("notes: drag between columns, unpin keeps it in Notes", async ({ page }) => {
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem("t-notes-v1") || "{}");
+    d.notes = [
+      {
+        id: "n1",
+        title: "Drag me",
+        body: "b",
+        labels: [],
+        checklist: [],
+        images: [],
+        suggest: [],
+        list: "todo",
+        archived: false,
+      },
+    ];
+    localStorage.setItem("t-notes-v1", JSON.stringify(d));
+  });
+  await page.reload();
+  await page.locator("#tab-board").click();
+  await page.locator("#c-todo .note").first().dragTo(page.locator("#c-doing"));
+  await page.waitForTimeout(500);
+  await expect(page.locator("#c-doing .note").first()).toContainText("Drag me");
+  const list = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("t-notes-v1")).notes[0].list,
+  );
+  expect(list).toBe("doing");
+  await page.locator("#c-doing .note .ntitle").first().click();
+  await page.waitForTimeout(400);
+  await page.locator("#modal-body select").first().selectOption({ index: 0 });
+  await page.waitForTimeout(300);
+  await expect(page.locator("#c-doing .note")).toHaveCount(0);
+  await page.locator("#modal button:has-text('close')").click();
+  await page.locator("#tab-notes").click();
+  await expect(page.locator("#notes .note").first()).toContainText("Drag me");
+});
+
+test("notes: attach image in compose shows on front and persists", async ({ page }) => {
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await page.locator("#new-note").click();
+  await page.locator("#compose-title").fill("Pic note");
+  await page.locator("#compose-attach").click();
+  await page
+    .locator("#img-pick")
+    .setInputFiles([{ name: "red.png", mimeType: "image/png", buffer: png }]);
+  await expect(page.locator("#compose-imgs .thumbw")).toHaveCount(1);
+  await page.locator("#compose-save").click();
+  await expect(
+    page.locator("#notes .note .thumbs .thumb").first(),
+  ).toBeVisible();
+  await page.reload();
+  const n = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("t-notes-v1")).notes[0].images.length,
+  );
+  expect(n).toBe(1);
+  await page.locator("#notes .note .ntitle").first().click();
+  await page.waitForTimeout(300);
+  const m = page.locator("#modal-body");
+  await expect(m.locator(".imgsec .thumb")).toHaveCount(1);
+  await m.locator(".imgsec .thumbw .iconbtn").click();
+  await expect(m.locator(".imgsec .thumb")).toHaveCount(0);
+});

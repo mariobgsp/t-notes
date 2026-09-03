@@ -671,6 +671,48 @@ button:disabled {
 .clist .mgrow {
  font-size: 13.5px;
 }
+.thumbs {
+ display: flex;
+ gap: 6px;
+ flex-wrap: wrap;
+}
+.thumbw {
+ position: relative;
+}
+.thumb {
+ width: 64px;
+ height: 64px;
+ object-fit: cover;
+ border-radius: var(--r-s);
+ border: 1px solid var(--line);
+ cursor: zoom-in;
+ display: block;
+}
+.thumbw .iconbtn {
+ position: absolute;
+ top: -7px;
+ right: -7px;
+ min-width: 22px;
+ height: 22px;
+ background: var(--card);
+}
+.imgsec {
+ display: grid;
+ gap: 7px;
+}
+#compose-imgs {
+ margin-top: 2px;
+}
+#viewer {
+ padding: 12px;
+ max-width: min(92vw, 900px);
+}
+#viewer-img {
+ display: block;
+ max-width: 100%;
+ max-height: 78dvh;
+ border-radius: var(--r-s);
+}
 .cmt {
  border-top: 1px solid var(--line);
  padding-top: 7px;
