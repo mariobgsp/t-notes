@@ -42,6 +42,7 @@ function normalize(d) {
     n.body = n.body || "";
     n.labels = n.labels || [];
     n.checklist = n.checklist || [];
+    n.suggest = n.suggest || [];
     n.archived = !!n.archived;
   }
   for (const c of d.cards) {
@@ -54,6 +55,7 @@ function normalize(d) {
     c.labels = c.labels || [];
     c.checklist = c.checklist || [];
     c.comments = c.comments || [];
+    c.suggest = c.suggest || [];
     c.due = c.due || null;
     c.archived = !!c.archived;
   }
@@ -93,7 +95,7 @@ const escHtml = (x) =>
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-async function aiChat(prompt, maxTokens = 500, st = s.settings) {
+async function aiChat(prompt, maxTokens = 4000, st = s.settings) {
   if (!st.key) return null;
   const url = `${st.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const ctl = new AbortController();
@@ -145,10 +147,12 @@ function el(tag, text, cls) {
 // inline SVG icon set: 16px viewBox, stroke 1.5, currentColor. No emoji/dingbats.
 const PATHS = {
   edit: "M11.3 2.9l1.8 1.8L5 12.9 2.8 13.5l.6-2.2 7.9-8.4z",
-  archive: "M2.5 5.5h11M4 5.5V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5.5M5.5 5.5v-2h5v2M6.5 9h3",
+  archive:
+    "M2.5 5.5h11M4 5.5V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5.5M5.5 5.5v-2h5v2M6.5 9h3",
   restore: "M5 8l3-3 3 3M8 5v6M4 12.5h8",
   del: "M4 4.5l8 8M12 4.5l-8 8",
-  trash: "M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.5 8.5a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9l.5-8.5M6.6 7v4M9.4 7v4",
+  trash:
+    "M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.5 8.5a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9l.5-8.5M6.6 7v4M9.4 7v4",
   desc: "M2.5 4.5h11M2.5 8h7M2.5 11.5h9",
   comment: "M2.5 3.5h11v8h-6l-3 2.5v-2.5h-2z",
   cal: "M3 5.5h10V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 5.5V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1.5M5.5 2.5v3M10.5 2.5v3M5 8h2M9 8h2",
@@ -158,7 +162,8 @@ const PATHS = {
   left: "M9.5 3.5L5 8l4.5 4.5",
   right: "M6.5 3.5L11 8l-4.5 4.5",
   tag: "M8.5 2l5 5-6 6H2.5v-5zM5.5 6a1 1 0 1 0 0-.01",
-  convert: "M4 2.5v8M2.5 4H8M2.5 4l1.5-1.5M2.5 4L4 5.5M12 9v4.5M10.5 11H16M10.5 11l1.5-1.5M10.5 11l1.5 1.5",
+  convert:
+    "M4 2.5v8M2.5 4H8M2.5 4l1.5-1.5M2.5 4L4 5.5M12 9v4.5M10.5 11H16M10.5 11l1.5-1.5M10.5 11l1.5 1.5",
 };
 function ico(name, title) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -842,19 +847,57 @@ board.onclick = (e) => {
 // ponytail: one dialog for new note / new card / edit note — no second modal for editing
 let composeMode = "note";
 let editId = null;
+let composeItems = []; // pending checklist items, shown as real checkboxes pre-save
 const composeDlg = document.getElementById("compose"),
   cH = document.getElementById("compose-h"),
   cTitle = document.getElementById("compose-title"),
   cText = document.getElementById("compose-text"),
   cListRow = document.getElementById("compose-listrow"),
-  cList = document.getElementById("compose-list");
+  cList = document.getElementById("compose-list"),
+  cClist = document.getElementById("compose-clist"),
+  cItems = document.getElementById("compose-citems"),
+  cProg = document.getElementById("compose-cprog");
 document.getElementById("compose-tools").append(toolsEl(cText));
+function renderComposeClist() {
+  cItems.replaceChildren();
+  cClist.hidden = composeItems.length === 0;
+  const done = composeItems.filter((i) => i.done).length;
+  cProg.textContent = `${done}/${composeItems.length}`;
+  for (const item of composeItems) {
+    const r = el("div", null, "mrow"),
+      cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = item.done;
+    cb.onchange = () => {
+      item.done = cb.checked;
+      renderComposeClist();
+    };
+    const sp = el("span", item.text, "mgrow");
+    const x = el("button", null, "iconbtn");
+    x.title = "remove item";
+    x.append(ico("del"));
+    x.onclick = () => {
+      composeItems = composeItems.filter((z) => z !== item);
+      renderComposeClist();
+    };
+    r.append(cb, sp, x);
+    cItems.append(r);
+  }
+}
+function addComposeItems(texts) {
+  for (const t of texts) {
+    const t2 = t.trim();
+    if (t2) composeItems.push({ id: uid(), text: t2, done: false });
+  }
+  renderComposeClist();
+}
 function openCompose(mode, id) {
   composeMode = mode;
   editId = id || null;
   cListRow.hidden = mode !== "card";
   cTitle.value = "";
   cText.replaceChildren();
+  composeItems = [];
   if (mode === "card") {
     cList.replaceChildren();
     for (const l of s.lists) {
@@ -864,17 +907,19 @@ function openCompose(mode, id) {
       cList.append(o);
     }
   }
-  if (mode === "note" && editId) {
-    const n = s.notes.find((x) => x.id === editId);
-    cH.textContent = "Edit note";
-    cTitle.value = n.title || "";
-    cText.append(htmlNodes(n.body || ""));
+  const existing = editId
+    ? (mode === "note" ? s.notes : s.cards).find((x) => x.id === editId)
+    : null;
+  if (existing) {
+    cH.textContent = mode === "note" ? "Edit note" : "Edit card";
+    cTitle.value = existing.title || "";
+    cText.append(htmlNodes(existing.body || existing.desc || ""));
+    composeItems = (existing.checklist || []).map((z) => ({ ...z }));
   } else {
     cH.textContent = mode === "note" ? "New note" : "New card";
-    if (mode === "card" && !s.lists.length) {
-      cListRow.hidden = true;
-    }
+    if (mode === "card" && !s.lists.length) cListRow.hidden = true;
   }
+  renderComposeClist();
   composeDlg.showModal();
   setTimeout(() => cTitle.focus(), 50);
 }
@@ -889,6 +934,7 @@ document.getElementById("compose-save").onclick = () => {
     if (n) {
       n.title = t;
       n.body = html;
+      n.checklist = composeItems.map((z) => ({ ...z }));
       toast("Note updated");
     } else {
       s.notes.unshift({
@@ -896,30 +942,46 @@ document.getElementById("compose-save").onclick = () => {
         title: t,
         body: html,
         labels: [],
-        checklist: [],
+        checklist: composeItems.map((z) => ({ ...z })),
+        suggest: [],
         archived: false,
       });
       toast("Note saved");
+      suggestAuto(s.notes[0]);
     }
   } else {
     if (!s.lists.length) {
       toast("Add a list first");
       return;
     }
-    s.cards.push({
-      id: uid(),
-      title: t,
-      desc: html,
-      done: false,
-      list: cList.value || s.lists[0].id,
-      labels: [],
-      checklist: [],
-      comments: [],
-      due: null,
-      archived: false,
-    });
-    log(`added “${t}”`);
-    toast("Card added");
+    const existing = editId
+      ? s.cards.find((x) => x.id === editId)
+      : null;
+    if (existing) {
+      existing.title = t;
+      existing.desc = html;
+      existing.checklist = composeItems.map((z) => ({ ...z }));
+      log(`edited “${t}”`);
+      toast("Card updated");
+    } else {
+      const card = {
+        id: uid(),
+        title: t,
+        desc: html,
+        done: false,
+        list: cList.value || s.lists[0].id,
+        labels: [],
+        checklist: composeItems.map((z) => ({ ...z })),
+        comments: [],
+        suggest: [],
+        due: null,
+        archived: false,
+      };
+      s.cards.push(card);
+      log(`added “${t}”`);
+      toast("Card added");
+      suggestAuto(card);
+    }
   }
   save();
   composeDlg.close();
@@ -982,13 +1044,13 @@ document.getElementById("set-close").onclick = () => setDlg.close();
 // AI actions: summarize, checklist, improve, ideas
 const AI_PROMPTS = {
   summarize: (t) =>
-    `Summarize this note in 2-3 short sentences. Plain text only, no headers:\n\n${t}`,
+    `Summarize the note below in 2-3 short sentences. Reply with ONLY the summary text, no headers, no labels, no quotation marks.\n\nNote:\n${t}`,
   checklist: (t) =>
-    `Turn this note into a short checklist. Reply with one item per line, no bullets or numbers:\n\n${t}`,
+    `Turn the note below into actionable checklist items. Reply with ONE item per line, each starting with a dash and a space, like:\n- Buy milk\n- Call the dentist\nDo not number them, do not add headers, reply with only the checklist lines.\n\nNote:\n${t}`,
   improve: (t) =>
-    `Rewrite this note clearly with proper grammar. Keep the same meaning and language. Reply with the rewritten note only:\n\n${t}`,
+    `Rewrite the note below with clear grammar and natural wording. Keep every fact and the same meaning and language. Reply with ONLY the rewritten note, no heading, no title line, no quotation marks.\n\nNote:\n${t}`,
   ideas: (t) =>
-    `Suggest 3 short, practical next steps for this note. One per line, no numbering:\n\n${t}`,
+    `Suggest 3 short, practical next steps based on the note below. Reply with ONE idea per line, each starting with a dash and a space. No headers, no numbering.\n\nNote:\n${t}`,
 };
 const AI_DONE = {
   summarize: "Summarized",
@@ -999,8 +1061,65 @@ const AI_DONE = {
 function linesOf(out) {
   return out
     .split("\n")
-    .map((l) => l.trim().replace(/^manent[-*\d.)\s]+/, ""))
+    .map((l) => l.trim().replace(/^[-*•\d.)\s]+/, ""))
+    .map((l) => l.trim())
     .filter(Boolean);
+}
+// auto AI suggestion thread: runs once after a NEW note/card is saved, stored on
+// the item as pending suggestions the user can apply (-> checklist) or reject.
+async function suggestAuto(it) {
+  if (!s.settings.key || it.suggest?.length) return;
+  const text = `${it.title || ""}\n${plain(it.body || it.desc || "")}`.trim();
+  if (!plain(text).trim()) return;
+  it.suggest = [{ id: uid(), text: "Asking AI for next steps…", state: "busy" }];
+  const budget = Math.min(8000, Math.round(4000 + text.length * 0.4));
+  const out = await aiChat(AI_PROMPTS.ideas(text), budget);
+  if (out == null) {
+    it.suggest = [];
+    save();
+    return;
+  }
+  it.suggest = linesOf(out).map((t) => ({ id: uid(), text: t, state: "pending" }));
+  save();
+}
+function renderSuggests(it, cont) {
+  const pend = (it.suggest || []).filter((s) => s.state === "pending");
+  const busy = (it.suggest || []).filter((s) => s.state === "busy");
+  if (!pend.length && !busy.length) return;
+  const wrap = el("div", null, "sugg");
+  const head = el("div", null, "sugg-head");
+  const label = el("span", "AI suggestions", "badge");
+  label.style.color = "var(--acc)";
+  label.style.borderColor = "color-mix(in srgb,var(--acc) 40%,var(--line))";
+  head.append(label);
+  wrap.append(head);
+  if (busy.length) {
+    wrap.append(el("div", "Asking AI for next steps…", "sugg-busy"));
+  }
+  for (const s of pend) {
+    const row = el("div", null, "sugg-row");
+    const sp = el("span", s.text, "mgrow");
+    const app = el("button", "Apply", "fbtn");
+    app.onclick = () => {
+      it.checklist = it.checklist || [];
+      it.checklist.push({ id: uid(), text: s.text, done: false });
+      s.state = "applied";
+      save();
+      renderAll();
+      cont();
+      toast("Added to checklist");
+    };
+    const rej = el("button", "Reject", "fbtn");
+    rej.onclick = () => {
+      s.state = "rejected";
+      save();
+      renderAll();
+      cont();
+    };
+    row.append(sp, app, rej);
+    wrap.append(row);
+  }
+  mb.append(wrap);
 }
 function aiRow(getText, apply) {
   const row = el("div", null, "mrow");
@@ -1029,7 +1148,11 @@ async function runAi(kind, getText, apply, btn) {
     return;
   }
   btn.disabled = true;
-  const out = await aiChat(AI_PROMPTS[kind](body.slice(0, 6000)));
+  // send the whole note (no truncation); reply budget scales with input,
+  // generous ceiling because reasoning models spend tokens thinking first.
+  // ponytail: 1 char ~= 0.35 token; 4000 base + 0.4/char covers long notes
+  const budget = Math.min(8000, Math.round(4000 + body.length * 0.4));
+  const out = await aiChat(AI_PROMPTS[kind](body), budget);
   btn.disabled = false;
   if (out == null) return;
   apply(kind, out);
@@ -1042,11 +1165,8 @@ document.getElementById("compose-ai").append(
     () => ({ title: cTitle.value, text: plain(editableHtml(cText)) }),
     (kind, out) => {
       if (kind === "checklist" || kind === "ideas") {
-        const cur = editableHtml(cText);
-        const add = linesOf(out)
-          .map((l) => `- ${escHtml(l)}`)
-          .join("<br>");
-        cText.replaceChildren(htmlNodes(cur + (cur ? "<br>" : "") + add));
+        // real checklist items with checkboxes, shown above the buttons pre-save
+        addComposeItems(linesOf(out));
       } else {
         cText.replaceChildren(htmlNodes(escHtml(out).replace(/\n/g, "<br>")));
       }
@@ -1126,6 +1246,7 @@ function renderNoteDetail() {
   mb.append(title);
   mb.append(labelRow(n));
   if (openPal === n.id) mb.append(palRow(n));
+  renderSuggests(n, () => renderNoteDetail());
   const body = el("div", null, "rich");
   body.contentEditable = "true";
   body.dataset.ph = "Note body… (select text for bold, color, size)";
@@ -1217,7 +1338,20 @@ function renderNoteDetail() {
   add.append(ai);
   mb.append(add);
   const foot = el("div", null, "mrow"),
-    edit = el("button", "edit in popup", "fbtn");
+    saveBtn = el("button", "Save", null);
+  saveBtn.onclick = () => {
+    // flush any pending contenteditable edits, then persist
+    const b = mb.querySelector(".rich");
+    if (b) {
+      n.body = editableHtml(b);
+      b.blur();
+    }
+    save();
+    renderAll();
+    modal.close();
+    toast("Note saved");
+  };
+  const edit = el("button", "edit in popup", "fbtn");
   edit.onclick = () => {
     modal.close();
     openCompose("note", n.id);
@@ -1231,7 +1365,7 @@ function renderNoteDetail() {
   };
   const close = el("button", "close", "fbtn");
   close.onclick = () => modal.close();
-  foot.append(edit, arc, close);
+  foot.append(saveBtn, edit, arc, close);
   mb.append(foot);
 }
 function renderModal() {
@@ -1276,9 +1410,9 @@ function renderModal() {
     renderModal();
   };
   const done = el("button", null, "fbtn");
-    done.title = c.done ? "reopen" : "mark done";
-    done.append(ico(c.done ? "restore" : "check"));
-    done.append(document.createTextNode(c.done ? " Done" : " Mark done"));
+  done.title = c.done ? "reopen" : "mark done";
+  done.append(ico(c.done ? "restore" : "check"));
+  done.append(document.createTextNode(c.done ? " Done" : " Mark done"));
   done.onclick = () => {
     c.done = !c.done;
     save();
@@ -1289,6 +1423,7 @@ function renderModal() {
   mb.append(meta);
   mb.append(labelRow(c));
   if (openPal === c.id) mb.append(palRow(c));
+  renderSuggests(c, () => renderModal());
   const desc = el("div", null, "rich");
   desc.contentEditable = "true";
   desc.dataset.ph = "Description… (select text for bold, color, size)";
@@ -1424,7 +1559,19 @@ function renderModal() {
   cm.append(ci2);
   mb.append(cm);
   const foot = el("div", null, "mrow"),
-    arc = el("button", "archive card", "fbtn");
+    saveBtn = el("button", "Save", null);
+  saveBtn.onclick = () => {
+    const d = mb.querySelector(".rich");
+    if (d) {
+      c.desc = editableHtml(d);
+      d.blur();
+    }
+    save();
+    renderAll();
+    modal.close();
+    toast("Card saved");
+  };
+  const arc = el("button", "archive card", "fbtn");
   arc.onclick = () => {
     c.archived = true;
     log(`archived “${c.title}”`);
@@ -1434,7 +1581,7 @@ function renderModal() {
   };
   const close = el("button", "close", "fbtn");
   close.onclick = () => modal.close();
-  foot.append(arc, close);
+  foot.append(saveBtn, arc, close);
   mb.append(foot);
 }
 mb.onclick = (e) => {

@@ -98,7 +98,7 @@ test("board: card lifecycle with modal", async ({ page }) => {
   await addCard(page, "Ship v1 #work");
   const card = page.locator("#c-todo .card").first();
   await expect(card).toContainText("Ship v1");
-  await card.locator(".mv[data-dir=\"1\"]").click();
+  await card.locator('.mv[data-dir="1"]').click();
   await expect(page.locator("#c-doing .card").first()).toContainText("Ship v1");
   await page
     .locator("#c-doing .card")
