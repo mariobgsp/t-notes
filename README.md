@@ -62,6 +62,16 @@ proper uninstall entry — Tauri builds it on GitHub Actions:
 - The ⏻ startup toggle works in both builds (Tauri autostart plugin
   vs Go `/api/startup` fallback).
 
+## Release notes
+
+- The installer is **unsigned**: Windows SmartScreen will show an
+  "Unknown publisher" warning — click *More info → Run anyway*.
+  Signing (paid cert) is the fix, skipped for now.
+- **No auto-updater yet**: new versions are manual downloads from
+  GitHub Releases.
+- First install needs internet once (WebView2 bootstrapper); nearly all
+  Windows 10/11 PCs already have WebView2 via Edge/Windows Update.
+
 ## Tests
 
 ```sh
