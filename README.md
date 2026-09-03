@@ -1,17 +1,19 @@
 # t-notes
 
-<img src="logo.svg" alt="t-notes pixel logo" width="64" height="64">
+<img src="web/logo.svg" alt="t-notes pixel logo" width="64" height="64">
 
 Local-first, single-user notes + kanban board. Trello's core, none of its cloud — zero dependencies, tiny RAM.
 
 ## Features
 
-- **Notes** — save, list, archive, color labels, `#tags`
-- **Board** — custom lists (add/rename/delete), cards with detail view:
-  description, checklist + progress bar, due dates + overdue highlight,
-  comments, labels, `#tags`, drag & drop + ←/→ move
+- **Notes** — `+ New note` popup: title first, rich text (bold, italic,
+  color, size), archive, color labels, `#tags`
+- **Board** — Jira-style color-coded lists (add/rename/delete), cards with
+  detail view: rich description, checklist + progress bar, due dates +
+  overdue highlight, comments, label strips, `#tags`, drag & drop + ←/→ move
 - **Search + filter** — text search, label and `#tag` filters
 - **Archive + activity log**, checklist-item → card conversion
+- **Toasts** confirm every action; **?** button opens the in-app guide
 - **Light/dark mode** (follows system, toggle persisted)
 - **AI assistant** (BYOK) — OpenCode Zen free default (`big-pickle`), OpenRouter,
   or any OpenAI-compatible URL. Summarize, Checklist, Improve, Ideas in notes
@@ -49,6 +51,9 @@ sh build-windows.sh   # needs only Go → dist/t-notes.exe + dist/t-notes-setup.
 | `web/` | Frontend: `index.html`, `styles.css`, `app.js`, `logo.svg` (no framework) |
 | `main.go` | Windows host: local server + self-installer with shortcuts |
 | `build-windows.sh` | `GOOS=windows go build` cross-compile from Linux |
+| `src-tauri/` | Tauri desktop app (NSIS installer, autostart plugin) |
+| `e2e/` | Playwright suite (system Chromium, mocked AI endpoint) |
+| `.github/workflows/` | `windows build` CI → published GitHub Release |
 
 ## Real desktop app (Tauri)
 
@@ -56,9 +61,9 @@ The Go exe above is a browser launcher. For a usual Windows program — own
 window, `t-notes-setup.exe` installer with Start Menu + Desktop shortcuts,
 proper uninstall entry — Tauri builds it on GitHub Actions:
 
-- Push a tag: `git tag v0.1.0 && git push origin v0.1.0`, or run the
-  `windows build` workflow manually. A draft release with the installer
-  appears under GitHub Releases.
+- Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the
+  `windows build` workflow manually. The installer publishes itself under
+  GitHub Releases (no draft step).
 - Local dev (Linux): `npm install` then `npx tauri dev` (needs Rust).
 - The ⏻ startup toggle works in both builds (Tauri autostart plugin
   vs Go `/api/startup` fallback).
@@ -79,11 +84,14 @@ proper uninstall entry — Tauri builds it on GitHub Actions:
 cd e2e && npm install && npx playwright test   # system Chromium, no browser downloads
 ```
 
-Covers: notes add/tag/persist, card lifecycle (move, modal, checklist, due,
-labels, comments), search, custom lists, theme persistence.
+10 tests cover: popup composer, rich text, labels, notes add/tag/persist,
+card lifecycle (move, modal, checklist, due, labels, comments),
+import/export roundtrip, AI actions (mocked endpoint), guide, search,
+custom lists, theme persistence.
 
 ## Lean by design
 
-~25KB frontend, ~9MB self-contained exe, uses the system's browser instead of
-bundling Chromium (~150MB saved vs Electron). Animations are `transform`/`opacity`
+~52KB of frontend code (64K folder), ~10MB self-contained Go exe, ~30MB
+Tauri desktop app — all using the system WebView/browser instead of bundling
+Chromium (~150MB saved vs Electron). Animations are `transform`/`opacity`
 only with `content-visibility` for long lists.
