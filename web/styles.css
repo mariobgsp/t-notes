@@ -23,7 +23,24 @@
  --shadow-sm: 0 1px 2px rgba(16, 20, 26, 0.05);
  --shadow-md: 0 4px 14px rgba(16, 20, 26, 0.09);
  --focus: 0 0 0 3px rgba(10, 132, 255, 0.28);
+ --ease: cubic-bezier(0.2, 0, 0, 1);
+ --dur-1: 0.12s;
+ --dur-2: 0.15s;
+ --dur-3: 0.2s;
  color-scheme: light;
+}
+[data-theme="midnight"] {
+ --bg: #0f1220;
+ --bg2: #171b30;
+ --card: #1c2138;
+ --fg: #e8ebf5;
+ --fg2: #b9c0d6;
+ --mut: #868ea8;
+ --line: #2c3352;
+ --line2: #3d4666;
+ --acc: #6e9bff;
+ --acc2: #9dbdff;
+ color-scheme: dark;
 }
 [data-theme="dark"] {
  --bg: #16181c;
@@ -366,6 +383,8 @@ button:disabled {
 }
 .note,
 .card {
+ content-visibility: auto;
+ contain-intrinsic-size: auto 120px;
  background: var(--card);
  border: 1px solid var(--line);
  border-radius: var(--r-m);
@@ -375,10 +394,10 @@ button:disabled {
  align-items: flex-start;
  box-shadow: var(--shadow-sm);
  transition:
-  border-color 0.15s ease,
-  box-shadow 0.15s ease,
-  transform 0.15s ease,
-  opacity 0.2s ease;
+  border-color var(--dur-2) var(--ease),
+  box-shadow var(--dur-2) var(--ease),
+  transform var(--dur-2) var(--ease),
+  opacity var(--dur-3) var(--ease);
 }
 .note:hover,
 .card:hover {

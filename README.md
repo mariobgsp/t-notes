@@ -20,7 +20,7 @@ Local-first, single-user notes + kanban board. Trello's core, none of its cloud 
 - **Search + filter** — text search, label and `#tag` filters
 - **Archive + activity log**, checklist-item → card conversion
 - **Toasts** confirm every action; **?** button opens the in-app guide
-- **Light/dark mode** (follows system, toggle persisted)
+- **Light/dark/midnight themes** (follows system, toggle cycles and persists)
 - **AI assistant** (BYOK) — Command Code default (`meta/muse-spark-1.3-contributor`),
   plus OpenCode Zen free, OpenRouter, or any OpenAI-compatible URL.
   Summarize, Checklist, Improve, Ideas in notes and cards.
@@ -98,6 +98,7 @@ custom lists, theme persistence.
 
 ## Lean by design
 
-~38KB of frontend, ~10MB self-contained Go exe, ~30MB Tauri app. Renders 500+ items
-in well under a second with a single-digit-MB JS heap; search is debounced and
+~38KB of frontend, ~10MB self-contained Go exe, ~30MB Tauri app. Renders 10k notes
+in ~25ms with a single-digit-MB JS heap (lists window at 50 + `content-visibility`);
+search is debounced with an opt-in Rust batch-match in Tauri for 2k+ corpora, and
 animations are `transform`/`opacity` only, respecting `prefers-reduced-motion`.

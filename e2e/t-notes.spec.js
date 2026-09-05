@@ -247,7 +247,9 @@ test("ai: missing key opens settings", async ({ page }) => {
   await expect(page.locator("#settings")).toContainText("AI settings");
 });
 
-test("notes: pin to board list via compose, move via detail, unpin", async ({ page }) => {
+test("notes: pin to board list via compose, move via detail, unpin", async ({
+  page,
+}) => {
   await page.locator("#new-note").click();
   await page.locator("#compose-title").fill("Pinned note");
   await page.locator("#compose-text").fill("body here");
@@ -277,7 +279,9 @@ test("notes: pin to board list via compose, move via detail, unpin", async ({ pa
   expect(list).toBe("doing");
 });
 
-test("notes: drag between columns, unpin keeps it in Notes", async ({ page }) => {
+test("notes: drag between columns, unpin keeps it in Notes", async ({
+  page,
+}) => {
   await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem("t-notes-v1") || "{}");
     d.notes = [
@@ -314,7 +318,9 @@ test("notes: drag between columns, unpin keeps it in Notes", async ({ page }) =>
   await expect(page.locator("#notes .note").first()).toContainText("Drag me");
 });
 
-test("notes: attach image in compose shows on front and persists", async ({ page }) => {
+test("notes: attach image in compose shows on front and persists", async ({
+  page,
+}) => {
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
     "base64",

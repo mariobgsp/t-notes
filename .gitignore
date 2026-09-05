@@ -3,3 +3,8 @@ e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
+
+# rust/tauri
+src-tauri/target/
+src-tauri/gen/
+.pi/

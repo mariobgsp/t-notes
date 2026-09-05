@@ -399,6 +399,7 @@ function thumbEl(im2) {
   im.src = im2.url;
   im.alt = im2.name || "attached image";
   im.loading = "lazy";
+  im.decoding = "async";
   im.onclick = (ev) => {
     ev.stopPropagation();
     const v = document.getElementById("viewer-img");
@@ -511,7 +512,8 @@ document.getElementById("guide-close").onclick = () =>
   document.getElementById("guide-modal").close();
 document.getElementById("theme").onclick = () => {
   const r = document.documentElement,
-    d = r.dataset.theme === "dark" ? "light" : "dark";
+    next = { light: "dark", dark: "midnight", midnight: "light" },
+    d = next[r.dataset.theme] || "light";
   r.dataset.theme = d;
   localStorage.setItem("tn-theme", d);
 };
@@ -540,6 +542,9 @@ function matches(it) {
   if (filter.label && !it.labels.includes(filter.label)) return false;
   if (filter.tag && !hasTag(text, filter.tag)) return false;
   if (query && !text.toLowerCase().includes(query)) return false;
+  // ponytail: Rust batch-match override for big corpora; cleared on each keystroke
+  if (rustHits && query && !filter.label && !filter.tag)
+    return rustHits.has(it.id);
   return true;
 }
 function labelRow(it) {
@@ -703,8 +708,12 @@ function renderNotes() {
     p.style.color = "var(--mut)";
     nl.append(p);
   }
-  for (const n of live) nl.append(noteEl(n, false));
-  for (const n of old) an.append(noteEl(n, true));
+  // ponytail: window large lists, counts stay exact via badges
+  const CAP = 50;
+  for (const n of live.slice(0, CAP)) nl.append(noteEl(n, false));
+  if (live.length > CAP)
+    nl.append(el("p", `+${live.length - CAP} more — refine search.`, "badge"));
+  for (const n of old.slice(0, CAP)) an.append(noteEl(n, true));
 }
 nl.onclick = noteClick;
 an.onclick = noteClick;
@@ -779,7 +788,26 @@ document.getElementById("search-input").oninput = (e) => {
   // debounce: render only after typing pauses (cheap on a big board)
   clearTimeout(searchTimer);
   searchTimer = setTimeout(renderAll, 120);
+  // ponytail: Rust batch-match for big corpora in Tauri; sync fallback otherwise
+  const core = window.__TAURI__?.core;
+  if (core?.invoke && query && s.notes.length > 2000) {
+    const q = query,
+      gen = ++rustGen;
+    core
+      .invoke("match_notes", {
+        query: q,
+        texts: s.notes.map((n) => `${n.title} ${plain(n.body || "")}`),
+      })
+      .then((hits) => {
+        if (gen !== rustGen || q !== query) return;
+        rustHits = new Set(s.notes.filter((_, i) => hits[i]).map((n) => n.id));
+        renderAll();
+      })
+      .catch(() => {});
+  } else rustHits = null;
 };
+let rustHits = null,
+  rustGen = 0;
 document.getElementById("show-act").onclick = (e) => {
   showAct = !showAct;
   document.getElementById("activity").hidden = !showAct;
